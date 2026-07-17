@@ -1,0 +1,69 @@
+@import 'tailwindcss';
+
+@source '../views';
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+    --font-sans: 'Avenir Next', 'Trebuchet MS', ui-sans-serif, sans-serif;
+    --font-display: 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+}
+
+@layer base {
+    *,
+    ::after,
+    ::before,
+    ::backdrop,
+    ::file-selector-button {
+        border-color: var(--color-stone-200, currentColor);
+    }
+
+    html {
+        color-scheme: light;
+        background: var(--color-stone-100);
+    }
+
+    html.dark {
+        color-scheme: dark;
+        background: var(--color-stone-950);
+    }
+
+    body {
+        @apply bg-stone-100 text-stone-950 antialiased dark:bg-stone-950 dark:text-stone-50;
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+        font: inherit;
+    }
+
+    [x-cloak],
+    [wire\:cloak] {
+        display: none !important;
+    }
+}
+
+@layer components {
+    .paper-grid {
+        background-image:
+            linear-gradient(to right, rgb(120 113 108 / 0.08) 1px, transparent 1px),
+            linear-gradient(to bottom, rgb(120 113 108 / 0.08) 1px, transparent 1px);
+        background-size: 24px 24px;
+    }
+
+    .dark .paper-grid {
+        background-image:
+            linear-gradient(to right, rgb(168 162 158 / 0.06) 1px, transparent 1px),
+            linear-gradient(to bottom, rgb(168 162 158 / 0.06) 1px, transparent 1px);
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    ::view-transition-old(root),
+    ::view-transition-new(root) {
+        animation-duration: 160ms;
+    }
+}
