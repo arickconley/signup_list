@@ -145,6 +145,16 @@ test('the emailed code creates a verified passwordless Account and signs it in',
     expect(auth()->user()->hasVerifiedEmail())->toBeTrue();
 });
 
+test('email verification establishes fresh authentication', function () {
+    Mail::fake();
+
+    $this->post('/access', ['email' => 'alice@example.com']);
+
+    $this->post('/access/code', ['code' => codeFromAccountAccessMail()])
+        ->assertRedirect(route('dashboard'))
+        ->assertSessionHas('auth.password_confirmed_at', now()->timestamp);
+});
+
 test('an invalid code fails without creating a session', function () {
     Mail::fake();
 

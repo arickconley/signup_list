@@ -6,6 +6,7 @@ use App\Actions\Fortify\ResetAccountPassword;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Laravel\Fortify\Fortify;
@@ -28,6 +29,7 @@ class FortifyServiceProvider extends ServiceProvider
         $this->configureActions();
         $this->configureViews();
         $this->configureRateLimiting();
+        $this->configurePasskeyManagementMiddleware();
     }
 
     /**
@@ -72,6 +74,22 @@ class FortifyServiceProvider extends ServiceProvider
             return Limit::perMinute(10)->by(
                 ($credentialId ?: $request->session()->getId()).'|'.$request->ip(),
             );
+        });
+    }
+
+    /**
+     * Require a verified Account and fresh authentication for passkey management.
+     */
+    private function configurePasskeyManagementMiddleware(): void
+    {
+        $this->app->booted(function (): void {
+            $managementRoutes = ['passkey.registration-options', 'passkey.store', 'passkey.destroy'];
+
+            foreach (Route::getRoutes()->getRoutes() as $route) {
+                if (in_array($route->getName(), $managementRoutes, strict: true)) {
+                    $route->middleware(['password.confirm', 'verified']);
+                }
+            }
         });
     }
 }

@@ -92,6 +92,7 @@ class AccountAccessController extends Controller
     {
         Auth::login($account);
         $request->session()->regenerate();
+        $request->session()->passwordConfirmed();
         $request->session()->forget('account_access_challenge');
 
         $destination = $account->hasCompleteProfile()

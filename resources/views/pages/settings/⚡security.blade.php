@@ -1,6 +1,7 @@
 <?php
 
 use App\Concerns\PasswordValidationRules;
+use App\Support\FreshAuthentication;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 use Laravel\Fortify\Actions\DisableTwoFactorAuthentication;
@@ -121,11 +122,16 @@ new #[Title('Security settings')] class extends Component {
     /**
      * Delete the passkey.
      */
-    public function deletePasskey(DeletePasskey $deletePasskey): void
+    public function deletePasskey(
+        DeletePasskey $deletePasskey,
+        FreshAuthentication $freshAuthentication,
+    ): void
     {
         if (! $this->deletingPasskeyId) {
             return;
         }
+
+        $freshAuthentication->ensure();
 
         $passkey = auth()->user()->passkeys()->findOrFail($this->deletingPasskeyId);
 
