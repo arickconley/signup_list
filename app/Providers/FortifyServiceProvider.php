@@ -3,12 +3,15 @@
 namespace App\Providers;
 
 use App\Actions\Fortify\ResetAccountPassword;
+use App\Http\Responses\PasswordResetLinkRequestResponse;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
+use Laravel\Fortify\Contracts\FailedPasswordResetLinkRequestResponse as FailedPasswordResetLinkRequestResponseContract;
+use Laravel\Fortify\Contracts\SuccessfulPasswordResetLinkRequestResponse as SuccessfulPasswordResetLinkRequestResponseContract;
 use Laravel\Fortify\Fortify;
 
 class FortifyServiceProvider extends ServiceProvider
@@ -18,7 +21,14 @@ class FortifyServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->bind(
+            FailedPasswordResetLinkRequestResponseContract::class,
+            PasswordResetLinkRequestResponse::class,
+        );
+        $this->app->bind(
+            SuccessfulPasswordResetLinkRequestResponseContract::class,
+            PasswordResetLinkRequestResponse::class,
+        );
     }
 
     /**

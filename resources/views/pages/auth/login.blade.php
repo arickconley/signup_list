@@ -36,12 +36,51 @@
             </div>
         @endif
 
-        <x-passkey-verify />
+        <x-passkey-verify :separator="__('Or sign in with password')" />
+
+        <form method="POST" action="{{ route('login.store') }}" class="flex flex-col gap-5">
+            @csrf
+
+            <x-ui.input
+                id="password-email"
+                name="email"
+                :label="__('Email address')"
+                :value="old('email')"
+                type="email"
+                required
+                autocomplete="email"
+                placeholder="email@example.com"
+            />
+
+            <x-ui.input
+                name="password"
+                :label="__('Password')"
+                type="password"
+                required
+                autocomplete="current-password"
+                viewable
+            />
+
+            <div class="flex justify-end">
+                <x-ui.link :href="route('password.request')" wire:navigate>{{ __('Forgot password?') }}</x-ui.link>
+            </div>
+
+            <x-ui.button variant="primary" type="submit" class="w-full">
+                {{ __('Sign in with password') }}
+            </x-ui.button>
+        </form>
+
+        <div class="flex items-center gap-3 text-xs uppercase tracking-wide text-stone-500" aria-hidden="true">
+            <span class="h-px flex-1 bg-stone-200 dark:bg-stone-700"></span>
+            {{ __('Or use an email code') }}
+            <span class="h-px flex-1 bg-stone-200 dark:bg-stone-700"></span>
+        </div>
 
         <form method="POST" action="{{ route('account-access.request') }}" class="flex flex-col gap-6">
             @csrf
 
             <x-ui.input
+                id="passwordless-email"
                 name="email"
                 :label="__('Email address')"
                 :value="old('email')"

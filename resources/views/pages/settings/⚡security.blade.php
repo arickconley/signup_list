@@ -1,9 +1,9 @@
 <?php
 
+use App\Actions\ChangeAccountPassword;
 use App\Concerns\PasswordValidationRules;
 use App\Support\FreshAuthentication;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Validation\ValidationException;
 use Laravel\Fortify\Actions\DisableTwoFactorAuthentication;
 use Laravel\Fortify\Features;
 use Laravel\Fortify\Fortify;
@@ -16,9 +16,11 @@ use Livewire\Attributes\On;
 new #[Title('Security settings')] class extends Component {
     use PasswordValidationRules;
 
-    public string $current_password = '';
     public string $password = '';
     public string $password_confirmation = '';
+
+    #[Locked]
+    public bool $hasPassword;
 
     public bool $canManageTwoFactor;
 
@@ -45,6 +47,7 @@ new #[Title('Security settings')] class extends Component {
      */
     public function mount(DisableTwoFactorAuthentication $disableTwoFactorAuthentication): void
     {
+        $this->hasPassword = auth()->user()->password !== null;
         $this->canManageTwoFactor = Features::canManageTwoFactorAuthentication();
 
         if ($this->canManageTwoFactor) {
@@ -64,28 +67,42 @@ new #[Title('Security settings')] class extends Component {
     }
 
     /**
-     * Update the password for the currently authenticated user.
+     * Add or replace the password for the currently authenticated Account.
      */
-    public function updatePassword(): void
+    public function setPassword(
+        ChangeAccountPassword $changeAccountPassword,
+        FreshAuthentication $freshAuthentication,
+    ): void
     {
-        try {
-            $validated = $this->validate([
-                'current_password' => $this->currentPasswordRules(),
-                'password' => $this->passwordRules(),
-            ]);
-        } catch (ValidationException $e) {
-            $this->reset('current_password', 'password', 'password_confirmation');
+        $freshAuthentication->ensure();
 
-            throw $e;
-        }
-
-        Auth::user()->update([
-            'password' => $validated['password'],
+        $validated = $this->validate([
+            'password' => $this->passwordRules(),
         ]);
+        $hadPassword = Auth::user()->password !== null;
 
-        $this->reset('current_password', 'password', 'password_confirmation');
+        $changeAccountPassword->set(Auth::user(), $validated['password']);
 
-        session()->flash('success', __('Password updated.'));
+        $this->reset('password', 'password_confirmation');
+        $this->hasPassword = true;
+
+        session()->flash('success', $hadPassword ? __('Password replaced.') : __('Password added.'));
+    }
+
+    /**
+     * Remove the password from the currently authenticated Account.
+     */
+    public function removePassword(
+        ChangeAccountPassword $changeAccountPassword,
+        FreshAuthentication $freshAuthentication,
+    ): void
+    {
+        $freshAuthentication->ensure();
+
+        $changeAccountPassword->remove(Auth::user());
+
+        $this->hasPassword = false;
+        session()->flash('success', __('Password removed.'));
     }
 
     /**
@@ -176,19 +193,14 @@ new #[Title('Security settings')] class extends Component {
 
     <h2 class="sr-only">{{ __('Security settings') }}</h2>
 
-    <x-pages::settings.layout :heading="__('Update password')" :subheading="__('Ensure your account is using a long, random password to stay secure')">
-        <form method="POST" wire:submit="updatePassword" class="mt-6 space-y-6">
-            <x-ui.input
-                wire:model="current_password"
-                :label="__('Current password')"
-                type="password"
-                required
-                autocomplete="current-password"
-                viewable
-            />
+    <x-pages::settings.layout
+        :heading="$hasPassword ? __('Replace password') : __('Add password')"
+        :subheading="__('Use a long, unique password. Email sign-in remains available.')"
+    >
+        <form method="POST" wire:submit="setPassword" class="mt-6 space-y-6">
             <x-ui.input
                 wire:model="password"
-                :label="__('New password')"
+                :label="$hasPassword ? __('New password') : __('Password')"
                 type="password"
                 required
                 autocomplete="new-password"
@@ -207,11 +219,29 @@ new #[Title('Security settings')] class extends Component {
 
             <div class="flex items-center gap-4">
                 <x-ui.button variant="primary" type="submit" data-test="update-password-button">
-                    {{ __('Save') }}
+                    {{ $hasPassword ? __('Replace password') : __('Add password') }}
                 </x-ui.button>
             </div>
             <x-ui.flash />
         </form>
+
+        @if ($hasPassword)
+            <section class="mt-10 border-t border-stone-200 pt-8 dark:border-stone-800">
+                <h3 class="font-display text-xl font-semibold">{{ __('Remove password') }}</h3>
+                <p class="mt-1 text-sm leading-6 text-stone-600 dark:text-stone-400">
+                    {{ __('You can continue signing in by email or passkey.') }}
+                </p>
+                <x-ui.button
+                    variant="danger"
+                    type="button"
+                    class="mt-4"
+                    wire:click="removePassword"
+                    wire:confirm="{{ __('Remove your password? Email and passkey sign-in will remain available.') }}"
+                >
+                    {{ __('Remove password') }}
+                </x-ui.button>
+            </section>
+        @endif
 
         @if ($canManageTwoFactor)
             <section class="mt-12">

@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Models\Account;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Auth;
 
 class RequestAccountAccess extends FormRequest
 {
@@ -22,8 +23,13 @@ class RequestAccountAccess extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        $account = Auth::user();
+        $email = $account instanceof Account
+            ? $account->email
+            : (string) $this->input('email');
+
         $this->merge([
-            'email' => Account::normalizeEmail((string) $this->input('email')),
+            'email' => Account::normalizeEmail($email),
         ]);
     }
 }

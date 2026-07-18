@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Data\SignupDefaults;
+use App\Notifications\AccountPasswordReset;
 use Database\Factories\AccountFactory;
 use Illuminate\Auth\MustVerifyEmail;
 use Illuminate\Contracts\Auth\MustVerifyEmail as MustVerifyEmailContract;
@@ -77,6 +78,11 @@ class Account extends Authenticatable implements MustVerifyEmailContract, Passke
             phone: $this->phone,
             timezone: $this->timezone ?? '',
         );
+    }
+
+    public function sendPasswordResetNotification(#[\SensitiveParameter] $token): void
+    {
+        $this->notify(new AccountPasswordReset($token));
     }
 
     public function initials(): string

@@ -31,7 +31,8 @@ class AccountAccessController extends Controller
             $request->session()->put('account_access_challenge', $challenge->public_id);
         }
 
-        return redirect()->route('login')->with('status', self::NEUTRAL_STATUS);
+        return redirect()->route(Auth::guest() ? 'login' : 'password.confirm')
+            ->with('status', self::NEUTRAL_STATUS);
     }
 
     public function consumeMagicLink(
@@ -41,13 +42,17 @@ class AccountAccessController extends Controller
         ConsumeAccountAccessChallenge $consumeAccountAccessChallenge,
     ): RedirectResponse {
         if (! $request->hasValidSignature()) {
-            return $this->invalidChallenge();
+            return $this->invalidChallenge($request);
+        }
+
+        if (! $this->challengeBelongsToAuthenticatedAccount($challenge)) {
+            return $this->invalidChallenge($request);
         }
 
         $account = $consumeAccountAccessChallenge->usingToken($challenge, $token);
 
         if ($account === null) {
-            return $this->invalidChallenge();
+            return $this->invalidChallenge($request);
         }
 
         return $this->establishSession($request, $account);
@@ -62,7 +67,7 @@ class AccountAccessController extends Controller
         $publicId = $request->session()->get('account_access_challenge');
 
         if (! is_string($publicId)) {
-            return $this->invalidChallenge();
+            return $this->invalidChallenge($request);
         }
 
         $challenge = AccountAccessChallenge::query()
@@ -70,28 +75,39 @@ class AccountAccessController extends Controller
             ->first();
 
         if ($challenge === null
+            || ! $this->challengeBelongsToAuthenticatedAccount($publicId)
             || ! $abuseControl->attemptVerification($challenge->email, $request->ip() ?? 'unknown')) {
-            return $this->invalidChallenge();
+            return $this->invalidChallenge($request);
         }
 
         $account = $consumeAccountAccessChallenge->usingCode($publicId, $validated['code']);
 
         if ($account === null) {
-            return $this->invalidChallenge();
+            return $this->invalidChallenge($request);
         }
 
         return $this->establishSession($request, $account);
     }
 
-    private function invalidChallenge(): RedirectResponse
+    private function invalidChallenge(Request $request): RedirectResponse
     {
-        return redirect()->route('login')->withErrors(['access' => self::INVALID_STATUS]);
+        return redirect()->route(Auth::guest() ? 'login' : 'password.confirm')
+            ->withErrors(['access' => self::INVALID_STATUS]);
     }
 
     private function establishSession(Request $request, Account $account): RedirectResponse
     {
-        Auth::login($account);
-        $request->session()->regenerate();
+        $authenticatedAccount = Auth::user();
+
+        if ($authenticatedAccount instanceof Account && ! $authenticatedAccount->is($account)) {
+            return $this->invalidChallenge($request);
+        }
+
+        if ($authenticatedAccount === null) {
+            Auth::login($account);
+            $request->session()->regenerate();
+        }
+
         $request->session()->passwordConfirmed();
         $request->session()->forget('account_access_challenge');
 
@@ -100,5 +116,19 @@ class AccountAccessController extends Controller
             : route('profile.edit');
 
         return redirect()->intended($destination);
+    }
+
+    private function challengeBelongsToAuthenticatedAccount(string $publicId): bool
+    {
+        $account = Auth::user();
+
+        if (! $account instanceof Account) {
+            return true;
+        }
+
+        return AccountAccessChallenge::query()
+            ->where('public_id', $publicId)
+            ->where('email', $account->email)
+            ->exists();
     }
 }

@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\ChangeAccountPassword;
 use App\Mail\AccountAccessMail;
 use App\Models\Account;
 use App\Models\AccountAccessChallenge;
@@ -8,6 +9,7 @@ use Illuminate\Contracts\Queue\ShouldQueueAfterCommit;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Notification;
 
 function renderedAccountAccessMail(): string
 {
@@ -33,11 +35,13 @@ function codeFromAccountAccessMail(): string
     return $matches[1] ?? '';
 }
 
-test('Account access screen requests only an email address', function () {
+test('Account access screen keeps email sign-in alongside password sign-in', function () {
     $this->get(route('login'))
         ->assertOk()
         ->assertSee('Email me a sign-in code')
-        ->assertDontSeeHtml('name="password"');
+        ->assertSee('Sign in with password')
+        ->assertSee('Forgot password?')
+        ->assertSeeHtml('name="password"');
 });
 
 test('requesting access returns a neutral response', function () {
@@ -153,6 +157,34 @@ test('email verification establishes fresh authentication', function () {
     $this->post('/access/code', ['code' => codeFromAccountAccessMail()])
         ->assertRedirect(route('profile.edit'))
         ->assertSessionHas('auth.password_confirmed_at', now()->timestamp);
+});
+
+test('passwordless email sign-in remains available after adding a password', function () {
+    Notification::fake();
+    $account = Account::factory()->passwordless()->create();
+    app(ChangeAccountPassword::class)->set($account, 'A-secure-password-2048!');
+    Mail::fake();
+
+    $this->post(route('account-access.request'), ['email' => $account->email]);
+    $this->post(route('account-access.code'), ['code' => codeFromAccountAccessMail()])
+        ->assertRedirect(route('dashboard'));
+
+    $this->assertAuthenticatedAs($account);
+    expect($account->refresh()->password)->not->toBeNull();
+});
+
+test('passwordless email sign-in remains available after removing a password', function () {
+    Notification::fake();
+    $account = Account::factory()->create();
+    app(ChangeAccountPassword::class)->remove($account);
+    Mail::fake();
+
+    $this->post(route('account-access.request'), ['email' => $account->email]);
+    $this->post(route('account-access.code'), ['code' => codeFromAccountAccessMail()])
+        ->assertRedirect(route('dashboard'));
+
+    $this->assertAuthenticatedAs($account);
+    expect($account->refresh()->password)->toBeNull();
 });
 
 test('an invalid code fails without creating a session', function () {

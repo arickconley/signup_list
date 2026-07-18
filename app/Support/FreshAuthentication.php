@@ -14,7 +14,7 @@ final class FreshAuthentication
         abort_if(
             Date::now()->unix() - $confirmedAt > $timeout,
             423,
-            'Fresh authentication required.',
+            __('Fresh authentication required.'),
         );
     }
 }
