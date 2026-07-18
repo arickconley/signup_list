@@ -19,8 +19,7 @@ class ChangeAccountPassword
             ? PasswordCredentialChange::Added
             : PasswordCredentialChange::Replaced;
 
-        $account->forceFill(['password' => $password])->save();
-        $account->notify(new AccountPasswordChanged($change));
+        $this->change($account, $password, $change);
     }
 
     public function remove(Account $account): void
@@ -29,13 +28,17 @@ class ChangeAccountPassword
             throw new AuthorizationException;
         }
 
-        $account->forceFill(['password' => null])->save();
-        $account->notify(new AccountPasswordChanged(PasswordCredentialChange::Removed));
+        $this->change($account, null, PasswordCredentialChange::Removed);
     }
 
     public function reset(Account $account, string $password): void
     {
+        $this->change($account, $password, PasswordCredentialChange::Reset);
+    }
+
+    private function change(Account $account, ?string $password, PasswordCredentialChange $change): void
+    {
         $account->forceFill(['password' => $password])->save();
-        $account->notify(new AccountPasswordChanged(PasswordCredentialChange::Reset));
+        $account->notify(new AccountPasswordChanged($change));
     }
 }

@@ -118,14 +118,14 @@ test('detected browser timezone initializes a blank profile and can be overridde
     expect($account->refresh()->timezone)->toBe('Europe/Paris');
 });
 
-test('captured Signup defaults are isolated from later profile updates', function () {
+test('captured Account defaults are isolated from later profile updates', function () {
     $account = Account::factory()->create([
         'name' => 'Earlier Name',
         'email' => 'earlier@example.com',
         'phone' => '555-0101',
         'timezone' => 'America/Los_Angeles',
     ]);
-    $historicalSnapshot = $account->signupDefaults();
+    $historicalSnapshot = $account->accountDefaults();
 
     $this->actingAs($account);
 
@@ -136,7 +136,7 @@ test('captured Signup defaults are isolated from later profile updates', functio
         ->call('updateProfileInformation')
         ->assertHasNoErrors();
 
-    $futureDefaults = $account->refresh()->signupDefaults();
+    $futureDefaults = $account->refresh()->accountDefaults();
 
     expect($historicalSnapshot)
         ->name->toBe('Earlier Name')

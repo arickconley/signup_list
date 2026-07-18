@@ -245,13 +245,13 @@ test('Passkey confirmation establishes the standard fresh authentication session
 });
 
 test('an Account cannot confirm with another Account credential', function () {
-    $owner = Account::factory()->create();
+    $credentialAccount = Account::factory()->create();
     $otherAccount = Account::factory()->create();
     $passkey = new VirtualPasskey;
 
-    $this->actingAs($owner)
+    $this->actingAs($credentialAccount)
         ->withSession(['auth.password_confirmed_at' => now()->timestamp]);
-    registerVirtualPasskeyForAuthenticatedAccount($this, $passkey, 'Owner key');
+    registerVirtualPasskeyForAuthenticatedAccount($this, $passkey, 'Primary key');
     $this->post(route('logout'));
 
     $this->actingAs($otherAccount);
@@ -262,7 +262,7 @@ test('an Account cannot confirm with another Account credential', function () {
     $this->postJson(route('passkey.confirm'), [
         'credential' => $passkey->authenticationCredential(
             $options['challenge'],
-            $owner->getPasskeyUserHandle(),
+            $credentialAccount->getPasskeyUserHandle(),
             origin: config('app.url'),
         ),
     ])->assertUnprocessable()
@@ -336,13 +336,13 @@ test('an expired fresh authentication session cannot revoke through the Livewire
 });
 
 test('an Account cannot revoke another Account Passkey', function () {
-    $owner = Account::factory()->create();
+    $credentialAccount = Account::factory()->create();
     $otherAccount = Account::factory()->create();
     $passkey = new VirtualPasskey;
 
-    $this->actingAs($owner)
+    $this->actingAs($credentialAccount)
         ->withSession(['auth.password_confirmed_at' => now()->timestamp]);
-    $passkeyId = registerVirtualPasskeyForAuthenticatedAccount($this, $passkey, 'Owner key');
+    $passkeyId = registerVirtualPasskeyForAuthenticatedAccount($this, $passkey, 'Primary key');
     $this->post(route('logout'));
 
     $this->actingAs($otherAccount)
@@ -351,9 +351,9 @@ test('an Account cannot revoke another Account Passkey', function () {
         ->assertForbidden();
 
     $this->post(route('logout'));
-    $this->actingAs($owner)
+    $this->actingAs($credentialAccount)
         ->withSession(['auth.password_confirmed_at' => now()->timestamp])
         ->get(route('security.edit'))
         ->assertOk()
-        ->assertSeeText('Owner key');
+        ->assertSeeText('Primary key');
 });

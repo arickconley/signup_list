@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use App\Data\SignupDefaults;
+use App\Data\AccountDefaults;
 use App\Notifications\AccountPasswordReset;
 use Database\Factories\AccountFactory;
 use Illuminate\Auth\MustVerifyEmail;
@@ -70,9 +70,9 @@ class Account extends Authenticatable implements MustVerifyEmailContract, Passke
             && in_array($this->timezone, timezone_identifiers_list(), true);
     }
 
-    public function signupDefaults(): SignupDefaults
+    public function accountDefaults(): AccountDefaults
     {
-        return new SignupDefaults(
+        return new AccountDefaults(
             name: $this->name ?? '',
             email: $this->email,
             phone: $this->phone,

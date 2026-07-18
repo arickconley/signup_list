@@ -2,7 +2,7 @@
 
 namespace App\Data;
 
-final readonly class SignupDefaults
+final readonly class AccountDefaults
 {
     public function __construct(
         public string $name,

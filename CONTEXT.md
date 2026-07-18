@@ -12,6 +12,10 @@ _Avoid_: Admin, host, creator
 A persistent identity that may participate in signup sheets and, when eligible, own them. Accounts begin with passwordless email access and may add other sign-in methods.
 _Avoid_: Owner account, participant account, user
 
+**Account Defaults**:
+The current Account profile values used to initialize future Signup Sheets and Signups. New records copy applicable values, so later profile changes do not rewrite them.
+_Avoid_: Live profile data, shared participant details
+
 **Deleted Account**:
 An account erased after fresh email verification and explicit confirmation. Its owned sheets are permanently deleted; its claims on other owners' sheets remain but all identifying details are replaced with “Deleted participant.”
 _Avoid_: Deactivated account, suspended user
