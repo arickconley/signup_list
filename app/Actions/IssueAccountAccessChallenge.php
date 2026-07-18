@@ -3,6 +3,7 @@
 namespace App\Actions;
 
 use App\Mail\AccountAccessMail;
+use App\Models\Account;
 use App\Models\AccountAccessChallenge;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -14,6 +15,7 @@ class IssueAccountAccessChallenge
 {
     public function handle(string $email): AccountAccessChallenge
     {
+        $email = Account::normalizeEmail($email);
         $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
         $token = Str::random(64);
         $expiresAt = now()->addMinutes(config('account-access.lifetime_minutes'));

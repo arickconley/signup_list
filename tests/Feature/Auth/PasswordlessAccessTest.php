@@ -193,7 +193,7 @@ test('using a code invalidates its companion magic link', function () {
 
 test('verification reuses the normalized Account email', function () {
     Mail::fake();
-    $account = Account::factory()->passwordless()->unverified()->create([
+    $account = Account::factory()->unverified()->create([
         'email' => 'alice@example.com',
     ]);
 
@@ -202,6 +202,7 @@ test('verification reuses the normalized Account email', function () {
 
     $this->assertAuthenticatedAs($account);
     expect($account->fresh()->hasVerifiedEmail())->toBeTrue()
+        ->and($account->fresh()->password)->not->toBeNull()
         ->and(Account::query()->count())->toBe(1);
 });
 
