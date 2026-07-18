@@ -107,6 +107,8 @@ test('eligible Account creates a UUID-addressed Draft visible on its dashboard',
 
     $dashboard
         ->assertOk()
+        ->assertSee('shareable link')
+        ->assertDontSee('private link')
         ->assertSee('Neighborhood cleanup')
         ->assertSee('Draft')
         ->assertSee(route('sheets.edit', $neighborhoodCleanup, absolute: false), escape: false);

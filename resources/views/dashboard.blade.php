@@ -4,7 +4,7 @@
             <div>
                 <p class="text-xs font-bold uppercase tracking-[0.18em] text-teal-700 dark:text-teal-400">{{ __('Your workspace') }}</p>
                 <h1 class="mt-2 font-display text-4xl font-semibold tracking-tight">{{ __('Signup sheets') }}</h1>
-                <p class="mt-2 max-w-xl text-stone-600 dark:text-stone-400">{{ __('Create a sheet, share its private link, and keep every contribution organized.') }}</p>
+                <p class="mt-2 max-w-xl text-stone-600 dark:text-stone-400">{{ __('Create a Signup Sheet, send its shareable link, and keep every contribution organized.') }}</p>
             </div>
             <a href="{{ route('sheets.create') }}" wire:navigate class="inline-flex min-h-11 items-center justify-center rounded-lg bg-teal-700 px-4 text-sm font-semibold text-white shadow-sm hover:bg-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2 dark:bg-teal-500 dark:text-stone-950 dark:hover:bg-teal-400">
                 {{ __('Create a signup sheet') }}
