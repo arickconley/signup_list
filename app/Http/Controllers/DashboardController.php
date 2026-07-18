@@ -1,0 +1,25 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Account;
+use App\Models\Sheet;
+use Illuminate\Contracts\View\View;
+use Illuminate\Http\Request;
+
+class DashboardController extends Controller
+{
+    public function __invoke(Request $request): View
+    {
+        $account = $request->user();
+
+        abort_unless($account instanceof Account, 403);
+
+        return view('dashboard', [
+            'drafts' => $account->ownedSheets()
+                ->where('state', Sheet::STATE_DRAFT)
+                ->latest()
+                ->get(),
+        ]);
+    }
+}
