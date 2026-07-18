@@ -76,6 +76,12 @@ class Sheet extends Model
         return $this->hasMany(Option::class);
     }
 
+    /** @return HasMany<Signup, $this> */
+    public function signups(): HasMany
+    {
+        return $this->hasMany(Signup::class);
+    }
+
     public function getRouteKeyName(): string
     {
         return 'public_id';

@@ -220,7 +220,7 @@ test('Published Sheet markup exposes only public content and UUID addressing', f
         ->assertDontSee('731001')
         ->assertDontSee('731002')
         ->assertDontSee('731003')
-        ->assertDontSee('wire:');
+        ->assertSeeHtml('wire:name="complete-unregistered-signup"');
 });
 
 test('Published Sheet has semantic keyboard and mobile-first structure', function () {

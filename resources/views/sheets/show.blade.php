@@ -1,4 +1,4 @@
-<x-layouts::public :title="$sheet->title" robots="noindex, nofollow">
+<x-layouts::public :title="$sheet->title" robots="noindex, nofollow" :include-livewire="true">
     <a href="#main-content" class="fixed start-4 top-4 z-50 -translate-y-24 rounded-md bg-stone-950 px-4 py-3 text-sm font-bold text-white shadow-lg transition focus-visible:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:bg-stone-50 dark:text-stone-950">
         {{ __('Skip to signup sheet') }}
     </a>
@@ -142,6 +142,10 @@
                         @endforeach
                     </ol>
                 </section>
+
+                @if ($isOpen && $sheet->participation_policy === \App\Models\Sheet::PARTICIPATION_OPEN)
+                    <livewire:complete-unregistered-signup :sheet-public-id="$sheet->public_id" />
+                @endif
             </article>
 
             <footer class="mt-6 flex flex-col gap-2 px-1 text-xs leading-5 text-stone-500 sm:flex-row sm:items-center sm:justify-between dark:text-stone-400">
