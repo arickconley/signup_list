@@ -34,7 +34,7 @@ test('security settings page can be rendered', function () {
     $response->assertSee('Passkeys');
     $response->assertSee('No passkeys yet');
     $response->assertSee('Two-factor authentication');
-    $response->assertSee('Enable 2FA');
+    $response->assertSee('Enable two-factor authentication');
 });
 
 test('security settings page requires password confirmation when enabled', function () {

@@ -1,9 +1,7 @@
 <?php
 
-use App\Enums\TwoFactorCredentialChange;
-use App\Notifications\AccountTwoFactorAuthenticationChanged;
+use App\Actions\ChangeAccountTwoFactorAuthentication;
 use App\Support\FreshAuthentication;
-use Laravel\Fortify\Actions\ConfirmTwoFactorAuthentication;
 use Laravel\Fortify\Actions\DisableTwoFactorAuthentication;
 use Laravel\Fortify\Actions\EnableTwoFactorAuthentication;
 use Livewire\Attributes\Computed;
@@ -94,16 +92,13 @@ new class extends Component {
      * Confirm two-factor authentication for the user.
      */
     public function confirmTwoFactor(
-        ConfirmTwoFactorAuthentication $confirmTwoFactorAuthentication,
+        ChangeAccountTwoFactorAuthentication $changeTwoFactorAuthentication,
         FreshAuthentication $freshAuthentication,
     ): void {
         $freshAuthentication->ensure();
         $this->validate();
 
-        $confirmTwoFactorAuthentication(auth()->user(), $this->code);
-
-        auth()->user()->notify(new AccountTwoFactorAuthenticationChanged(TwoFactorCredentialChange::Enabled));
-        $this->recoveryCodes = auth()->user()->fresh()->recoveryCodes();
+        $this->recoveryCodes = $changeTwoFactorAuthentication->confirm(auth()->user(), $this->code);
         $this->setupComplete = true;
     }
 
@@ -219,22 +214,7 @@ new class extends Component {
 
             @if ($setupComplete)
                 <div class="space-y-5">
-                    <x-ui.callout
-                        variant="warning"
-                        :heading="__('Save these recovery codes now')"
-                    >
-                        {{ __('They will not be shown again. Each code can restore access once if your authenticator is unavailable.') }}
-                    </x-ui.callout>
-
-                    <div
-                        class="grid gap-1 rounded-lg bg-stone-100 p-4 font-mono text-sm dark:bg-white/5"
-                        role="list"
-                        aria-label="{{ __('Recovery codes') }}"
-                    >
-                        @foreach ($recoveryCodes as $recoveryCode)
-                            <div role="listitem" class="select-text">{{ $recoveryCode }}</div>
-                        @endforeach
-                    </div>
+                    <x-ui.recovery-codes :codes="$recoveryCodes" />
 
                     <x-ui.button
                         variant="primary"

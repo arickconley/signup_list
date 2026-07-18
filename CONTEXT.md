@@ -12,6 +12,10 @@ _Avoid_: Admin, host, creator
 A persistent identity that may participate in signup sheets and, when eligible, own them. Accounts begin with passwordless email access and may add other sign-in methods.
 _Avoid_: Owner account, participant account, user
 
+**Two-Factor Authentication**:
+An optional password sign-in safeguard that requires a time-based one-time password from an authenticator app or an unused recovery code. Only an account with a password may enable it.
+_Avoid_: 2FA, TOTP authentication, two-factor credential
+
 **Account Defaults**:
 The current Account profile values used to initialize future Signup Sheets and Signups. New records copy applicable values, so later profile changes do not rewrite them.
 _Avoid_: Live profile data, shared participant details

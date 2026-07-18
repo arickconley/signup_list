@@ -127,7 +127,7 @@ test('a registered Passkey establishes an Account session', function () {
     $this->assertAuthenticatedAs($account);
 });
 
-test('a Passkey signs in without the password TOTP challenge', function () {
+test('a Passkey signs in without the password two-factor challenge', function () {
     $account = Account::factory()->withTwoFactor()->create();
     $passkey = new VirtualPasskey;
 

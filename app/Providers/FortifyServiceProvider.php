@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Actions\Fortify\ResetAccountPassword;
+use App\Http\Middleware\PreventDirectTwoFactorManagement;
 use App\Http\Responses\PasswordResetLinkRequestResponse;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -93,24 +94,19 @@ class FortifyServiceProvider extends ServiceProvider
      */
     private function configurePasskeyManagementMiddleware(): void
     {
-        $this->app->booted(function (): void {
-            $managementRoutes = ['passkey.registration-options', 'passkey.store', 'passkey.destroy'];
-
-            foreach (Route::getRoutes()->getRoutes() as $route) {
-                if (in_array($route->getName(), $managementRoutes, strict: true)) {
-                    $route->middleware(['password.confirm', 'verified']);
-                }
-            }
-        });
+        $this->addMiddlewareToRoutes(
+            ['passkey.registration-options', 'passkey.store', 'passkey.destroy'],
+            ['password.confirm', 'verified'],
+        );
     }
 
     /**
-     * Limit two-factor credential management to verified Accounts with passwords.
+     * Limit two-factor authentication management to verified Accounts with passwords.
      */
     private function configureTwoFactorManagementMiddleware(): void
     {
-        $this->app->booted(function (): void {
-            $managementRoutes = [
+        $this->addMiddlewareToRoutes(
+            [
                 'two-factor.confirm',
                 'two-factor.disable',
                 'two-factor.enable',
@@ -118,11 +114,21 @@ class FortifyServiceProvider extends ServiceProvider
                 'two-factor.recovery-codes',
                 'two-factor.regenerate-recovery-codes',
                 'two-factor.secret-key',
-            ];
+            ],
+            ['account.password', 'verified', PreventDirectTwoFactorManagement::class],
+        );
+    }
 
+    /**
+     * @param  list<string>  $routeNames
+     * @param  list<class-string|string>  $middleware
+     */
+    private function addMiddlewareToRoutes(array $routeNames, array $middleware): void
+    {
+        $this->app->booted(function () use ($routeNames, $middleware): void {
             foreach (Route::getRoutes()->getRoutes() as $route) {
-                if (in_array($route->getName(), $managementRoutes, strict: true)) {
-                    $route->middleware(['account.password', 'verified']);
+                if (in_array($route->getName(), $routeNames, strict: true)) {
+                    $route->middleware($middleware);
                 }
             }
         });

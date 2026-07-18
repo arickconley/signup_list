@@ -34,7 +34,7 @@ test('a passwordless Account cannot enable two-factor authentication', function 
     expect($account->refresh()->two_factor_secret)->toBeNull();
 });
 
-test('a passwordless Account is directed to add a password before TOTP setup', function () {
+test('a passwordless Account is directed to add a password before two-factor authentication setup', function () {
     $account = Account::factory()->passwordless()->create();
 
     $this->actingAs($account)
@@ -42,7 +42,7 @@ test('a passwordless Account is directed to add a password before TOTP setup', f
         ->get(route('security.edit'))
         ->assertOk()
         ->assertSeeText('Add password')
-        ->assertDontSeeText('Enable 2FA');
+        ->assertDontSeeText('Enable two-factor authentication');
 });
 
 test('the two-factor management endpoint rejects a passwordless Account', function () {
@@ -52,6 +52,34 @@ test('the two-factor management endpoint rejects a passwordless Account', functi
         ->withSession(['auth.password_confirmed_at' => time()])
         ->post(route('two-factor.enable'))
         ->assertForbidden();
+
+    expect($account->refresh()->two_factor_secret)->toBeNull();
+});
+
+test('direct Fortify management endpoints cannot bypass the audited two-factor authentication interface', function () {
+    $account = Account::factory()->withTwoFactor()->create();
+    $storedRecoveryCodes = $account->two_factor_recovery_codes;
+
+    $this->actingAs($account)
+        ->withSession(['auth.password_confirmed_at' => time()]);
+
+    $this->get(route('two-factor.recovery-codes'))->assertNotFound();
+    $this->post(route('two-factor.regenerate-recovery-codes'))->assertNotFound();
+    $this->delete(route('two-factor.disable'))->assertNotFound();
+
+    expect($account->refresh()->two_factor_recovery_codes)->toBe($storedRecoveryCodes)
+        ->and($account->hasEnabledTwoFactorAuthentication())->toBeTrue();
+
+    $account->forceFill([
+        'two_factor_secret' => null,
+        'two_factor_recovery_codes' => null,
+        'two_factor_confirmed_at' => null,
+    ])->save();
+
+    $this->post(route('two-factor.enable'))->assertNotFound();
+    $this->post(route('two-factor.confirm'), ['code' => '000000'])->assertNotFound();
+    $this->get(route('two-factor.qr-code'))->assertNotFound();
+    $this->get(route('two-factor.secret-key'))->assertNotFound();
 
     expect($account->refresh()->two_factor_secret)->toBeNull();
 });
@@ -70,7 +98,7 @@ test('two-factor setup requires fresh authentication', function () {
     expect($account->refresh()->two_factor_secret)->toBeNull();
 });
 
-test('an Account confirms TOTP setup and sees encrypted recovery codes once', function () {
+test('an Account confirms two-factor authentication setup and sees encrypted recovery codes once', function () {
     $account = Account::factory()->create();
 
     $this->actingAs($account)
@@ -102,7 +130,7 @@ test('an Account confirms TOTP setup and sees encrypted recovery codes once', fu
     ])->assertSet('recoveryCodes', []);
 });
 
-test('TOTP setup rejects an invalid confirmation code', function () {
+test('two-factor authentication setup rejects an invalid confirmation code', function () {
     Notification::fake();
     $account = Account::factory()->create();
 
@@ -171,7 +199,7 @@ test('two-factor confirmation rejects authentication that became stale during se
     Notification::assertNothingSent();
 });
 
-test('canceling unconfirmed TOTP setup removes its credentials', function () {
+test('canceling unconfirmed two-factor authentication setup removes its credentials', function () {
     Notification::fake();
     $account = Account::factory()->create();
 
@@ -283,7 +311,7 @@ test('regenerating recovery codes rejects stale authentication', function () {
     Notification::assertNothingSent();
 });
 
-test('password login completes with a valid TOTP code', function () {
+test('password login completes with a valid two-factor authentication code', function () {
     $googleTwoFactor = new Google2FA;
     $secret = $googleTwoFactor->generateSecretKey();
     $account = Account::factory()->create([
@@ -304,7 +332,7 @@ test('password login completes with a valid TOTP code', function () {
     $this->assertAuthenticatedAs($account);
 });
 
-test('password login rejects an invalid TOTP code', function () {
+test('password login rejects an invalid two-factor authentication code', function () {
     $account = Account::factory()->withTwoFactor()->create();
 
     $this->post(route('login.store'), [
@@ -352,7 +380,7 @@ test('a recovery code signs in once and is then consumed', function () {
     $this->assertGuest();
 });
 
-test('removing the password also disables its TOTP challenge', function () {
+test('removing the password also disables its two-factor authentication challenge', function () {
     Notification::fake();
     $account = Account::factory()->withTwoFactor()->create();
 

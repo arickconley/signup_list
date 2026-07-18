@@ -2,8 +2,7 @@
 
 use App\Actions\ChangeAccountPassword;
 use App\Concerns\PasswordValidationRules;
-use App\Enums\TwoFactorCredentialChange;
-use App\Notifications\AccountTwoFactorAuthenticationChanged;
+use App\Actions\ChangeAccountTwoFactorAuthentication;
 use App\Support\FreshAuthentication;
 use Illuminate\Support\Facades\Auth;
 use Laravel\Fortify\Actions\DisableTwoFactorAuthentication;
@@ -96,7 +95,7 @@ new #[Title('Security settings')] class extends Component {
      */
     public function removePassword(
         ChangeAccountPassword $changeAccountPassword,
-        DisableTwoFactorAuthentication $disableTwoFactorAuthentication,
+        ChangeAccountTwoFactorAuthentication $changeTwoFactorAuthentication,
         FreshAuthentication $freshAuthentication,
     ): void
     {
@@ -106,9 +105,7 @@ new #[Title('Security settings')] class extends Component {
         $changeAccountPassword->remove(Auth::user());
 
         if ($hadTwoFactorAuthentication) {
-            $disableTwoFactorAuthentication(Auth::user());
-            Auth::user()->notify(new AccountTwoFactorAuthenticationChanged(TwoFactorCredentialChange::Disabled));
-            $this->twoFactorEnabled = false;
+            $this->disableTwoFactorAuthentication($changeTwoFactorAuthentication);
         }
 
         $this->hasPassword = false;
@@ -191,13 +188,17 @@ new #[Title('Security settings')] class extends Component {
      * Disable two-factor authentication for the user.
      */
     public function disable(
-        DisableTwoFactorAuthentication $disableTwoFactorAuthentication,
+        ChangeAccountTwoFactorAuthentication $changeTwoFactorAuthentication,
         FreshAuthentication $freshAuthentication,
     ): void {
         $freshAuthentication->ensure();
-        $disableTwoFactorAuthentication(auth()->user());
-        auth()->user()->notify(new AccountTwoFactorAuthenticationChanged(TwoFactorCredentialChange::Disabled));
+        $this->disableTwoFactorAuthentication($changeTwoFactorAuthentication);
+    }
 
+    private function disableTwoFactorAuthentication(
+        ChangeAccountTwoFactorAuthentication $changeTwoFactorAuthentication,
+    ): void {
+        $changeTwoFactorAuthentication->disable(auth()->user());
         $this->twoFactorEnabled = false;
     }
 }; ?>
@@ -266,7 +267,7 @@ new #[Title('Security settings')] class extends Component {
                     @if ($twoFactorEnabled)
                         <div class="space-y-4">
                             <p class="text-sm leading-6 text-stone-600 dark:text-stone-300">
-                                {{ __('You will be prompted for a secure, random pin during login, which you can retrieve from the TOTP-supported application on your phone.') }}
+                                {{ __('You will be prompted for a secure, random code during password sign-in. Retrieve it from your authenticator app.') }}
                             </p>
 
                             <div class="flex justify-start">
@@ -274,7 +275,7 @@ new #[Title('Security settings')] class extends Component {
                                     variant="danger"
                                     wire:click="disable"
                                 >
-                                    {{ __('Disable 2FA') }}
+                                    {{ __('Disable two-factor authentication') }}
                                 </x-ui.button>
                             </div>
 
@@ -283,7 +284,7 @@ new #[Title('Security settings')] class extends Component {
                     @else
                         <div class="space-y-4">
                             <p class="text-sm leading-6 text-stone-600 dark:text-stone-400">
-                                {{ __('When you enable two-factor authentication, you will be prompted for a secure pin during login. This pin can be retrieved from a TOTP-supported application on your phone.') }}
+                                {{ __('When enabled, password sign-in also requires a secure, random code from your authenticator app.') }}
                             </p>
 
                             <x-ui.button
@@ -291,7 +292,7 @@ new #[Title('Security settings')] class extends Component {
                                 wire:click="$dispatch('start-two-factor-setup')"
                                 x-on:click="$dispatch('open-two-factor-setup')"
                             >
-                                {{ __('Enable 2FA') }}
+                                {{ __('Enable two-factor authentication') }}
                             </x-ui.button>
 
                             <livewire:pages::settings.two-factor-setup-modal :requires-confirmation="$requiresConfirmation" />
