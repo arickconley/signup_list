@@ -6,6 +6,7 @@ use App\Models\Account;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use PragmaRX\Google2FA\Google2FA;
 
 /** @extends Factory<Account> */
 class AccountFactory extends Factory
@@ -48,7 +49,7 @@ class AccountFactory extends Factory
     public function withTwoFactor(): static
     {
         return $this->state(fn (): array => [
-            'two_factor_secret' => encrypt('secret'),
+            'two_factor_secret' => encrypt((new Google2FA)->generateSecretKey()),
             'two_factor_recovery_codes' => encrypt(json_encode(['recovery-code-1'])),
             'two_factor_confirmed_at' => now(),
         ]);

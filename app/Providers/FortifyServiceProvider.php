@@ -40,6 +40,7 @@ class FortifyServiceProvider extends ServiceProvider
         $this->configureViews();
         $this->configureRateLimiting();
         $this->configurePasskeyManagementMiddleware();
+        $this->configureTwoFactorManagementMiddleware();
     }
 
     /**
@@ -98,6 +99,30 @@ class FortifyServiceProvider extends ServiceProvider
             foreach (Route::getRoutes()->getRoutes() as $route) {
                 if (in_array($route->getName(), $managementRoutes, strict: true)) {
                     $route->middleware(['password.confirm', 'verified']);
+                }
+            }
+        });
+    }
+
+    /**
+     * Limit two-factor credential management to verified Accounts with passwords.
+     */
+    private function configureTwoFactorManagementMiddleware(): void
+    {
+        $this->app->booted(function (): void {
+            $managementRoutes = [
+                'two-factor.confirm',
+                'two-factor.disable',
+                'two-factor.enable',
+                'two-factor.qr-code',
+                'two-factor.recovery-codes',
+                'two-factor.regenerate-recovery-codes',
+                'two-factor.secret-key',
+            ];
+
+            foreach (Route::getRoutes()->getRoutes() as $route) {
+                if (in_array($route->getName(), $managementRoutes, strict: true)) {
+                    $route->middleware(['account.password', 'verified']);
                 }
             }
         });

@@ -127,6 +127,30 @@ test('a registered Passkey establishes an Account session', function () {
     $this->assertAuthenticatedAs($account);
 });
 
+test('a Passkey signs in without the password TOTP challenge', function () {
+    $account = Account::factory()->withTwoFactor()->create();
+    $passkey = new VirtualPasskey;
+
+    $this->actingAs($account)
+        ->withSession(['auth.password_confirmed_at' => now()->timestamp]);
+    registerVirtualPasskeyForAuthenticatedAccount($this, $passkey, 'Personal Mac');
+    $this->post(route('logout'));
+
+    $options = $this->getJson(route('passkey.login-options'))
+        ->assertOk()
+        ->json('options');
+
+    $this->postJson(route('passkey.login'), [
+        'credential' => $passkey->authenticationCredential(
+            $options['challenge'],
+            $account->getPasskeyUserHandle(),
+            origin: config('app.url'),
+        ),
+    ])->assertOk();
+
+    $this->assertAuthenticatedAs($account);
+});
+
 test('Passkey authentication rejects a mismatched ceremony value', function (string $mismatch) {
     $account = Account::factory()->create();
     $passkey = new VirtualPasskey;

@@ -173,6 +173,17 @@ test('passwordless email sign-in remains available after adding a password', fun
     expect($account->refresh()->password)->not->toBeNull();
 });
 
+test('passwordless email sign-in bypasses the password TOTP challenge', function () {
+    $account = Account::factory()->withTwoFactor()->create();
+    Mail::fake();
+
+    $this->post(route('account-access.request'), ['email' => $account->email]);
+    $this->post(route('account-access.code'), ['code' => codeFromAccountAccessMail()])
+        ->assertRedirect(route('dashboard'));
+
+    $this->assertAuthenticatedAs($account);
+});
+
 test('passwordless email sign-in remains available after removing a password', function () {
     Notification::fake();
     $account = Account::factory()->create();

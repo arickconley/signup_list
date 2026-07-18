@@ -1,6 +1,10 @@
 <?php
 
+use App\Enums\TwoFactorCredentialChange;
+use App\Notifications\AccountTwoFactorAuthenticationChanged;
+use App\Support\FreshAuthentication;
 use Laravel\Fortify\Actions\ConfirmTwoFactorAuthentication;
+use Laravel\Fortify\Actions\DisableTwoFactorAuthentication;
 use Laravel\Fortify\Actions\EnableTwoFactorAuthentication;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
@@ -22,6 +26,9 @@ new class extends Component {
 
     public bool $setupComplete = false;
 
+    #[Locked]
+    public array $recoveryCodes = [];
+
     #[Validate('required|string|size:6', onUpdate: false)]
     public string $code = '';
 
@@ -34,8 +41,11 @@ new class extends Component {
     }
 
     #[On('start-two-factor-setup')]
-    public function startTwoFactorSetup(): void
+    public function startTwoFactorSetup(FreshAuthentication $freshAuthentication): void
     {
+        $freshAuthentication->ensure();
+        abort_if(auth()->user()->password === null, 403);
+
         $enableTwoFactorAuthentication = app(EnableTwoFactorAuthentication::class);
         $enableTwoFactorAuthentication(auth()->user());
 
@@ -83,17 +93,18 @@ new class extends Component {
     /**
      * Confirm two-factor authentication for the user.
      */
-    public function confirmTwoFactor(ConfirmTwoFactorAuthentication $confirmTwoFactorAuthentication): void
-    {
+    public function confirmTwoFactor(
+        ConfirmTwoFactorAuthentication $confirmTwoFactorAuthentication,
+        FreshAuthentication $freshAuthentication,
+    ): void {
+        $freshAuthentication->ensure();
         $this->validate();
 
         $confirmTwoFactorAuthentication(auth()->user(), $this->code);
 
+        auth()->user()->notify(new AccountTwoFactorAuthenticationChanged(TwoFactorCredentialChange::Enabled));
+        $this->recoveryCodes = auth()->user()->fresh()->recoveryCodes();
         $this->setupComplete = true;
-
-        $this->closeModal();
-
-        $this->dispatch('two-factor-enabled');
     }
 
     /**
@@ -109,17 +120,29 @@ new class extends Component {
     /**
      * Close the two-factor authentication modal.
      */
-    public function closeModal(): void
+    public function closeModal(DisableTwoFactorAuthentication $disableTwoFactorAuthentication): void
     {
+        $setupComplete = $this->setupComplete;
+
+        if (! $setupComplete && auth()->user()->two_factor_confirmed_at === null) {
+            $disableTwoFactorAuthentication(auth()->user());
+        }
+
         $this->reset(
             'code',
             'manualSetupKey',
             'qrCodeSvg',
+            'recoveryCodes',
             'showVerificationStep',
             'setupComplete',
         );
 
         $this->resetErrorBag();
+
+        if ($setupComplete) {
+            $this->dispatch('two-factor-enabled');
+        }
+
         $this->dispatch('close-two-factor-setup');
     }
 
@@ -194,7 +217,34 @@ new class extends Component {
                 </div>
             </div>
 
-            @if ($showVerificationStep)
+            @if ($setupComplete)
+                <div class="space-y-5">
+                    <x-ui.callout
+                        variant="warning"
+                        :heading="__('Save these recovery codes now')"
+                    >
+                        {{ __('They will not be shown again. Each code can restore access once if your authenticator is unavailable.') }}
+                    </x-ui.callout>
+
+                    <div
+                        class="grid gap-1 rounded-lg bg-stone-100 p-4 font-mono text-sm dark:bg-white/5"
+                        role="list"
+                        aria-label="{{ __('Recovery codes') }}"
+                    >
+                        @foreach ($recoveryCodes as $recoveryCode)
+                            <div role="listitem" class="select-text">{{ $recoveryCode }}</div>
+                        @endforeach
+                    </div>
+
+                    <x-ui.button
+                        variant="primary"
+                        class="w-full"
+                        wire:click="closeModal"
+                    >
+                        {{ __('I have saved these codes') }}
+                    </x-ui.button>
+                </div>
+            @elseif ($showVerificationStep)
                 <div class="space-y-6">
                     <div
                         class="flex flex-col items-center space-y-3 justify-center"

@@ -131,8 +131,8 @@ final class VirtualPasskey
             ->add(UnsignedIntegerObject::create(Ec2Key::TYPE), UnsignedIntegerObject::create(Ec2Key::TYPE_EC2))
             ->add(UnsignedIntegerObject::create(Ec2Key::ALG), NegativeIntegerObject::create(Algorithms::COSE_ALGORITHM_ES256))
             ->add(NegativeIntegerObject::create(Ec2Key::DATA_CURVE), UnsignedIntegerObject::create(Ec2Key::CURVE_P256))
-            ->add(NegativeIntegerObject::create(Ec2Key::DATA_X), ByteStringObject::create($x))
-            ->add(NegativeIntegerObject::create(Ec2Key::DATA_Y), ByteStringObject::create($y));
+            ->add(NegativeIntegerObject::create(Ec2Key::DATA_X), ByteStringObject::create(str_pad($x, 32, "\0", STR_PAD_LEFT)))
+            ->add(NegativeIntegerObject::create(Ec2Key::DATA_Y), ByteStringObject::create(str_pad($y, 32, "\0", STR_PAD_LEFT)));
     }
 
     private function encode(string $value): string

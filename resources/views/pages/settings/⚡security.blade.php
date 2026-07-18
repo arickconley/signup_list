@@ -2,6 +2,8 @@
 
 use App\Actions\ChangeAccountPassword;
 use App\Concerns\PasswordValidationRules;
+use App\Enums\TwoFactorCredentialChange;
+use App\Notifications\AccountTwoFactorAuthenticationChanged;
 use App\Support\FreshAuthentication;
 use Illuminate\Support\Facades\Auth;
 use Laravel\Fortify\Actions\DisableTwoFactorAuthentication;
@@ -94,12 +96,20 @@ new #[Title('Security settings')] class extends Component {
      */
     public function removePassword(
         ChangeAccountPassword $changeAccountPassword,
+        DisableTwoFactorAuthentication $disableTwoFactorAuthentication,
         FreshAuthentication $freshAuthentication,
     ): void
     {
         $freshAuthentication->ensure();
 
+        $hadTwoFactorAuthentication = Auth::user()->hasEnabledTwoFactorAuthentication();
         $changeAccountPassword->remove(Auth::user());
+
+        if ($hadTwoFactorAuthentication) {
+            $disableTwoFactorAuthentication(Auth::user());
+            Auth::user()->notify(new AccountTwoFactorAuthenticationChanged(TwoFactorCredentialChange::Disabled));
+            $this->twoFactorEnabled = false;
+        }
 
         $this->hasPassword = false;
         session()->flash('success', __('Password removed.'));
@@ -180,9 +190,13 @@ new #[Title('Security settings')] class extends Component {
     /**
      * Disable two-factor authentication for the user.
      */
-    public function disable(DisableTwoFactorAuthentication $disableTwoFactorAuthentication): void
-    {
+    public function disable(
+        DisableTwoFactorAuthentication $disableTwoFactorAuthentication,
+        FreshAuthentication $freshAuthentication,
+    ): void {
+        $freshAuthentication->ensure();
         $disableTwoFactorAuthentication(auth()->user());
+        auth()->user()->notify(new AccountTwoFactorAuthenticationChanged(TwoFactorCredentialChange::Disabled));
 
         $this->twoFactorEnabled = false;
     }
@@ -243,7 +257,7 @@ new #[Title('Security settings')] class extends Component {
             </section>
         @endif
 
-        @if ($canManageTwoFactor)
+        @if ($canManageTwoFactor && $hasPassword)
             <section class="mt-12">
                 <h3 class="font-display text-xl font-semibold">{{ __('Two-factor authentication') }}</h3>
                 <p class="mt-1 text-sm text-stone-600 dark:text-stone-400">{{ __('Manage your two-factor authentication settings') }}</p>
