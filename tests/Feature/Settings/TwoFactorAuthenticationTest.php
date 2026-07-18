@@ -1,6 +1,6 @@
 <?php
 
-use App\Enums\TwoFactorCredentialChange;
+use App\Enums\TwoFactorAuthenticationChange;
 use App\Models\Account;
 use App\Notifications\AccountTwoFactorAuthenticationChanged;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -130,6 +130,25 @@ test('an Account confirms two-factor authentication setup and sees encrypted rec
     ])->assertSet('recoveryCodes', []);
 });
 
+test('an enabled Account cannot reconfirm to redisclose recovery codes', function () {
+    Notification::fake();
+    $account = Account::factory()->withTwoFactor()->create();
+    $secret = decrypt($account->two_factor_secret);
+
+    $this->actingAs($account)
+        ->withSession(['auth.password_confirmed_at' => time()]);
+
+    Livewire::test('pages::settings.two-factor-setup-modal', [
+        'requiresConfirmation' => true,
+    ])
+        ->set('code', (new Google2FA)->getCurrentOtp($secret))
+        ->call('confirmTwoFactor')
+        ->assertHasErrors('code')
+        ->assertSet('recoveryCodes', []);
+
+    Notification::assertNothingSent();
+});
+
 test('two-factor authentication setup rejects an invalid confirmation code', function () {
     Notification::fake();
     $account = Account::factory()->create();
@@ -170,7 +189,7 @@ test('confirmed two-factor setup sends a queued security notification after comm
     Notification::assertSentTo(
         $account,
         AccountTwoFactorAuthenticationChanged::class,
-        fn (AccountTwoFactorAuthenticationChanged $notification): bool => $notification->change === TwoFactorCredentialChange::Enabled
+        fn (AccountTwoFactorAuthenticationChanged $notification): bool => $notification->change === TwoFactorAuthenticationChange::Enabled
             && $notification instanceof ShouldQueue
             && $notification instanceof ShouldQueueAfterCommit,
     );
@@ -241,7 +260,7 @@ test('an Account disables two-factor authentication after fresh authentication',
     Notification::assertSentTo(
         $account,
         AccountTwoFactorAuthenticationChanged::class,
-        fn (AccountTwoFactorAuthenticationChanged $notification): bool => $notification->change === TwoFactorCredentialChange::Disabled,
+        fn (AccountTwoFactorAuthenticationChanged $notification): bool => $notification->change === TwoFactorAuthenticationChange::Disabled,
     );
 });
 
@@ -286,7 +305,7 @@ test('an Account regenerates recovery codes and sees the replacement set once', 
     Notification::assertSentTo(
         $account,
         AccountTwoFactorAuthenticationChanged::class,
-        fn (AccountTwoFactorAuthenticationChanged $notification): bool => $notification->change === TwoFactorCredentialChange::RecoveryCodesRegenerated,
+        fn (AccountTwoFactorAuthenticationChanged $notification): bool => $notification->change === TwoFactorAuthenticationChange::RecoveryCodesRegenerated,
     );
 
     Livewire::test('pages::settings.two-factor.recovery-codes', [
@@ -399,6 +418,6 @@ test('removing the password also disables its two-factor authentication challeng
     Notification::assertSentTo(
         $account,
         AccountTwoFactorAuthenticationChanged::class,
-        fn (AccountTwoFactorAuthenticationChanged $notification): bool => $notification->change === TwoFactorCredentialChange::Disabled,
+        fn (AccountTwoFactorAuthenticationChanged $notification): bool => $notification->change === TwoFactorAuthenticationChange::Disabled,
     );
 });

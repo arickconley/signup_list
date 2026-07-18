@@ -2,7 +2,7 @@
 
 namespace App\Notifications;
 
-use App\Enums\TwoFactorCredentialChange;
+use App\Enums\TwoFactorAuthenticationChange;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeEncrypted;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -14,7 +14,7 @@ class AccountTwoFactorAuthenticationChanged extends Notification implements Shou
 {
     use Queueable;
 
-    public function __construct(public readonly TwoFactorCredentialChange $change) {}
+    public function __construct(public readonly TwoFactorAuthenticationChange $change) {}
 
     /** @return list<string> */
     public function via(object $notifiable): array

@@ -2,7 +2,7 @@
 
 namespace App\Enums;
 
-enum TwoFactorCredentialChange: string
+enum TwoFactorAuthenticationChange: string
 {
     case Enabled = 'enabled';
     case Disabled = 'disabled';
