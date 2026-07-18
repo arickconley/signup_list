@@ -1,5 +1,7 @@
 <?php
 
+use App\Actions\DuplicateSheet;
+use App\Models\Account;
 use App\Models\Sheet;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -284,6 +286,21 @@ new #[Title('Edit Draft Sheet')] class extends Component
         $this->announcement = __('Signup Sheet published.');
     }
 
+    public function duplicate(DuplicateSheet $duplicateSheet): void
+    {
+        $this->authorizeOwner();
+
+        $owner = Auth::user();
+
+        abort_unless($owner instanceof Account, 403);
+
+        $duplicate = $duplicateSheet->handle($owner, $this->sheet);
+
+        session()->flash('success', __('Signup Sheet duplicated into a new Draft.'));
+
+        $this->redirectRoute('sheets.edit', $duplicate, navigate: true);
+    }
+
     private function moveOption(int $optionId, int $offset): void
     {
         $this->authorizeOwner();
@@ -482,6 +499,12 @@ new #[Title('Edit Draft Sheet')] class extends Component
                 @enderror
                 <x-ui.button wire:click="publish" class="mt-4" :aria-describedby="$errors->has('options') ? 'publishing-options-error' : null">{{ __('Publish Signup Sheet') }}</x-ui.button>
             @endif
+        </section>
+
+        <section class="mt-8 rounded-2xl border border-stone-200 bg-white p-6 shadow-sm dark:border-stone-800 dark:bg-stone-900" aria-labelledby="sheet-actions-title">
+            <h2 id="sheet-actions-title" class="font-display text-2xl font-semibold">{{ __('Sheet actions') }}</h2>
+            <p class="mt-2 text-sm text-stone-600 dark:text-stone-400">{{ __('Start a new private Draft using this Sheet’s content and settings.') }}</p>
+            <x-ui.button wire:click="duplicate" variant="outline" class="mt-4">{{ __('Duplicate Sheet') }}</x-ui.button>
         </section>
     </div>
 </x-layouts::app>

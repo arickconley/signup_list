@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Account;
+use App\Support\DefaultSheetDeadline;
 use App\Support\OwnerEligibility;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -17,7 +18,7 @@ new #[Title('Create a signup sheet')] class extends Component
 
     public string $location = '';
 
-    public function save(OwnerEligibility $eligibility): void
+    public function save(DefaultSheetDeadline $defaultDeadline, OwnerEligibility $eligibility): void
     {
         $this->title = trim($this->title);
         $this->description = trim($this->description);
@@ -48,10 +49,7 @@ new #[Title('Create a signup sheet')] class extends Component
                 ? null
                 : Carbon::parse($this->eventAt, $account->timezone)->utc(),
             'location' => $this->location === '' ? null : $this->location,
-            'deadline_at' => Carbon::now($account->timezone)
-                ->addDays(14)
-                ->setTime(23, 59)
-                ->utc(),
+            'deadline_at' => $defaultDeadline->forTimezone($account->timezone),
             'timezone' => $account->timezone,
         ]);
 
