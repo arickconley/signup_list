@@ -2,6 +2,7 @@
 
 namespace App\Actions;
 
+use App\Data\CompleteSignupInput;
 use App\Data\CompleteSignupResult;
 use App\Exceptions\CannotCompleteSignup;
 use App\Exceptions\ImmediateTransactionBusy;
@@ -15,8 +16,9 @@ use App\Support\AccountAccessAbuseControl;
 use App\Support\ImmediateDatabaseTransaction;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
-class CompleteUnregisteredSignup
+class CompleteOpenSignup
 {
     public function __construct(
         private readonly ImmediateDatabaseTransaction $immediateTransaction,
@@ -24,38 +26,38 @@ class CompleteUnregisteredSignup
         private readonly AccountAccessAbuseControl $abuseControl,
     ) {}
 
-    /**
-     * @param  array<int, string>  $optionPublicIds
-     */
-    public function handle(
-        string $sheetPublicId,
-        string $name,
-        ?string $phone,
-        array $optionPublicIds,
-        ?string $email = null,
-        string $ipAddress = 'unknown',
-    ): CompleteSignupResult {
+    public function handle(CompleteSignupInput $input): CompleteSignupResult
+    {
         $connection = DB::connection();
 
         if ($connection->getDriverName() !== 'sqlite') {
             throw new CannotCompleteSignup('Signups are temporarily unavailable. Please try again.');
         }
 
-        $normalizedEmail = filled($email) ? Account::normalizeEmail($email) : null;
+        $normalizedEmail = filled($input->email) ? Account::normalizeEmail($input->email) : null;
 
         try {
             $writeResult = $this->immediateTransaction->run(
                 fn (): array => $this->createSignup(
-                    $sheetPublicId,
-                    $name,
-                    $phone,
-                    $optionPublicIds,
+                    $input->sheetPublicId,
+                    $input->name,
+                    $input->phone,
+                    $input->optionPublicIds,
                     $normalizedEmail,
                 ),
             );
+        } catch (CannotCompleteSignup $exception) {
+            $this->queueDuplicateAccessAfterCapacityFailure(
+                $exception,
+                $input->sheetPublicId,
+                $normalizedEmail,
+                $input->ipAddress,
+            );
+
+            throw $exception;
         } catch (ImmediateTransactionBusy $exception) {
             throw new CannotCompleteSignup(
-                'The signup list is busy. Please wait a moment and try again.',
+                'The Signup Sheet is busy. Please wait a moment and try again.',
                 previous: $exception,
             );
         }
@@ -66,10 +68,46 @@ class CompleteUnregisteredSignup
             return new CompleteSignupResult(checkEmail: false);
         }
 
-        if ($writeResult['duplicate'] && ! $this->abuseControl->attemptSend($normalizedEmail, $ipAddress)) {
+        if ($writeResult['duplicate'] && ! $this->abuseControl->attemptSend($normalizedEmail, $input->ipAddress)) {
             return new CompleteSignupResult(checkEmail: true);
         }
 
+        $challengePublicId = $this->queueAccessMessage($signup, $normalizedEmail);
+
+        return new CompleteSignupResult(
+            checkEmail: true,
+            accessChallengePublicId: $challengePublicId,
+        );
+    }
+
+    private function queueDuplicateAccessAfterCapacityFailure(
+        CannotCompleteSignup $exception,
+        string $sheetPublicId,
+        ?string $email,
+        string $ipAddress,
+    ): void {
+        if ($email === null || $exception->unavailableOptionPublicIds === []) {
+            return;
+        }
+
+        try {
+            $sheet = Sheet::query()->where('public_id', $sheetPublicId)->first(['id']);
+            $signup = $sheet?->signups()
+                ->where('email_snapshot', $email)
+                ->first();
+
+            if ($signup === null || ! $this->abuseControl->attemptSend($email, $ipAddress)) {
+                return;
+            }
+
+            $this->queueAccessMessage($signup, $email);
+        } catch (Throwable) {
+            // Preserve the identical capacity response even if access delivery fails.
+        }
+    }
+
+    private function queueAccessMessage(Signup $signup, string $email): string
+    {
         $sheet = $signup->sheet()->firstOrFail(['public_id', 'title']);
         $selectionNames = array_values($signup->optionClaims()
             ->with('option')
@@ -80,7 +118,7 @@ class CompleteUnregisteredSignup
         $sheetUrl = route('sheets.show', $sheet);
 
         $challenge = $this->issueAccountAccessChallenge->handle(
-            $normalizedEmail,
+            $email,
             fn (string $code, string $magicLink, CarbonInterface $expiresAt): SignupConfirmationMail => new SignupConfirmationMail(
                 sheetTitle: $sheet->title,
                 sheetUrl: $sheetUrl,
@@ -91,10 +129,7 @@ class CompleteUnregisteredSignup
             ),
         );
 
-        return new CompleteSignupResult(
-            checkEmail: true,
-            accessChallengePublicId: $challenge->public_id,
-        );
+        return $challenge->public_id;
     }
 
     /**
@@ -112,9 +147,7 @@ class CompleteUnregisteredSignup
 
         if (
             $sheet === null
-            || $sheet->state !== Sheet::STATE_PUBLISHED
-            || $sheet->participation_policy !== Sheet::PARTICIPATION_OPEN
-            || ! $sheet->deadline_at->isFuture()
+            || ! $sheet->isAcceptingSignups()
         ) {
             throw new CannotCompleteSignup('This Signup Sheet is no longer open for signups.');
         }
@@ -143,17 +176,6 @@ class CompleteUnregisteredSignup
             throw new CannotCompleteSignup('One or more selected Options do not belong to this Signup Sheet.');
         }
 
-        if ($email !== null) {
-            $existingSignup = Signup::query()
-                ->where('sheet_id', $sheet->id)
-                ->where('email_snapshot', $email)
-                ->first();
-
-            if ($existingSignup !== null) {
-                return ['signup' => $existingSignup, 'duplicate' => true];
-            }
-        }
-
         $unavailableOptions = $options->filter(
             fn (Option $option): bool => $option->claimed_count >= $option->capacity,
         );
@@ -167,6 +189,17 @@ class CompleteUnregisteredSignup
         }
 
         if ($email !== null) {
+            $existingSignup = Signup::query()
+                ->where('sheet_id', $sheet->id)
+                ->where('email_snapshot', $email)
+                ->first();
+
+            if ($existingSignup !== null) {
+                return ['signup' => $existingSignup, 'duplicate' => true];
+            }
+        }
+
+        if ($email !== null) {
             $account = Account::query()->firstOrCreate(
                 ['email' => $email],
                 [
@@ -176,6 +209,11 @@ class CompleteUnregisteredSignup
                     'timezone' => null,
                 ],
             );
+
+            $accountDefaults = $account->accountDefaults();
+            $name = filled($accountDefaults->name) ? $accountDefaults->name : $name;
+            $email = filled($accountDefaults->email) ? $accountDefaults->email : $email;
+            $phone = filled($accountDefaults->phone) ? $accountDefaults->phone : $phone;
         }
 
         $signup = $sheet->signups()->create([

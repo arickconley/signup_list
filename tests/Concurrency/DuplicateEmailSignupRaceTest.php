@@ -8,7 +8,7 @@ use App\Models\Signup;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\Process\Process;
 
-test('separate same-email submissions reserve capacity only once', function () {
+test('separate same-email Signups claim capacity only once', function () {
     $databasePath = tempnam(sys_get_temp_dir(), 'signup-duplicate-email-');
 
     expect($databasePath)->toBeString();
@@ -32,7 +32,7 @@ test('separate same-email submissions reserve capacity only once', function () {
             'selection_maximum' => 1,
         ]);
         $option = $sheet->options()->create([
-            'name' => 'One email, one reservation',
+            'name' => 'One email, one Option Claim',
             'capacity' => 2,
             'position' => 1,
         ]);

@@ -2,7 +2,7 @@
 
 ## 1. Product Summary
 
-Signup Sheets is a mobile-first web application for creating and sharing simple signup lists such as snack signups. Account holders create sheets; participants claim available options through unguessable UUID links.
+Signup Sheets is a mobile-first web application for creating and sharing Signup Sheets for needs such as snack signups. Account holders create sheets; participants claim available options through unguessable UUID links.
 
 Owners must have an eligible verified account. Participants may sign up without an account on Open sheets or use a passwordless account for persistent access and editing.
 

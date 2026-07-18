@@ -144,7 +144,7 @@
                 </section>
 
                 @if ($isOpen && $sheet->participation_policy === \App\Models\Sheet::PARTICIPATION_OPEN)
-                    <livewire:complete-unregistered-signup :sheet-public-id="$sheet->public_id" />
+                    <livewire:complete-open-signup :sheet-public-id="$sheet->public_id" />
                 @endif
             </article>
 

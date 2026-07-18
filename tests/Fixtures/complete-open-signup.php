@@ -1,6 +1,7 @@
 <?php
 
-use App\Actions\CompleteUnregisteredSignup;
+use App\Actions\CompleteOpenSignup;
+use App\Data\CompleteSignupInput;
 use App\Exceptions\CannotCompleteSignup;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
@@ -43,18 +44,18 @@ if (! file_exists($gatePath)) {
 
 try {
     $actionStartedAt = hrtime(true);
-    app(CompleteUnregisteredSignup::class)->handle(
-        $sheetPublicId,
-        $name,
-        null,
-        [$optionPublicId],
-    );
+    app(CompleteOpenSignup::class)->handle(new CompleteSignupInput(
+        sheetPublicId: $sheetPublicId,
+        name: $name,
+        phone: null,
+        optionPublicIds: [$optionPublicId],
+    ));
 
     $result = 'success';
 } catch (CannotCompleteSignup $exception) {
     $result = match (true) {
         $exception->unavailableOptionNames !== [] => 'unavailable',
-        str_contains($exception->getMessage(), 'signup list is busy') => 'busy',
+        str_contains($exception->getMessage(), 'Signup Sheet is busy') => 'busy',
         default => 'rejected',
     };
 } catch (Throwable) {

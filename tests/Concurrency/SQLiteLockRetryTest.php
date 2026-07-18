@@ -39,7 +39,7 @@ test('SQLite lock retries succeed after release and stop at the configured bound
 
             $completion = new Process([
                 PHP_BINARY,
-                base_path('tests/Fixtures/complete-unregistered-signup.php'),
+                base_path('tests/Fixtures/complete-open-signup.php'),
                 $databasePath,
                 $sheet->public_id,
                 $option->public_id,
@@ -180,7 +180,7 @@ test('arbitrary SQLite failures are not retried even when their message says dat
 
         $completion = new Process([
             PHP_BINARY,
-            base_path('tests/Fixtures/complete-unregistered-signup.php'),
+            base_path('tests/Fixtures/complete-open-signup.php'),
             $databasePath,
             $sheet->public_id,
             $option->public_id,

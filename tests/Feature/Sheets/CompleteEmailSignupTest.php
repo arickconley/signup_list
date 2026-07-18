@@ -1,6 +1,7 @@
 <?php
 
-use App\Actions\CompleteUnregisteredSignup;
+use App\Actions\CompleteOpenSignup;
+use App\Data\CompleteSignupInput;
 use App\Mail\SignupConfirmationMail;
 use App\Models\Account;
 use App\Models\AccountAccessChallenge;
@@ -18,7 +19,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
 use Livewire\Livewire;
 
-test('participant supplies email and immediately completes a pending Account Signup', function () {
+test('participant supplies email and completes a Signup with Pending Account Association', function () {
     Mail::fake();
 
     $sheet = Sheet::factory()->create([
@@ -33,7 +34,7 @@ test('participant supplies email and immediately completes a pending Account Sig
         'position' => 1,
     ]);
 
-    Livewire::test('complete-unregistered-signup', ['sheetPublicId' => $sheet->public_id])
+    Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
         ->set('name', '  Jordan Lee  ')
         ->set('email', '  Jordan@Example.COM  ')
         ->set('phone', '  555-0102  ')
@@ -121,12 +122,12 @@ test('duplicate normalized email is neutral and changes no Signup capacity', fun
     ]);
     $option = $sheet->options()->create([
         'name' => 'Welcome table',
-        'capacity' => 1,
+        'capacity' => 2,
         'position' => 1,
     ]);
 
     $complete = fn (string $email, string $name) => Livewire::test(
-        'complete-unregistered-signup',
+        'complete-open-signup',
         ['sheetPublicId' => $sheet->public_id],
     )
         ->set('name', $name)
@@ -167,7 +168,71 @@ test('duplicate normalized email is neutral and changes no Signup capacity', fun
     Mail::assertQueuedTimes(SignupConfirmationMail::class, 2);
 });
 
-test('existing Account profile is not overwritten by a pending Signup', function () {
+test('known and fresh emails receive the same capacity response while only the duplicate receives access', function () {
+    Mail::fake();
+
+    $account = Account::factory()->unverified()->create([
+        'email' => 'known@example.com',
+    ]);
+    $sheet = Sheet::factory()->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_OPEN,
+        'selection_maximum' => 1,
+    ]);
+    $option = $sheet->options()->create([
+        'name' => 'Full cleanup crew',
+        'capacity' => 1,
+        'claimed_count' => 1,
+        'position' => 1,
+    ]);
+    $knownSignup = $sheet->signups()->create([
+        'name_snapshot' => 'Known Participant',
+        'email_snapshot' => 'known@example.com',
+    ]);
+    $knownSignup->pendingAccountAssociation()->create([
+        'account_id' => $account->id,
+    ]);
+    $knownSignup->optionClaims()->create([
+        'option_id' => $option->id,
+    ]);
+
+    $responses = [];
+
+    foreach (['known@example.com', 'fresh@example.com'] as $email) {
+        $component = Livewire::test(
+            'complete-open-signup',
+            ['sheetPublicId' => $sheet->public_id],
+        )
+            ->set('name', 'Capacity Participant')
+            ->set('email', $email)
+            ->set('selectedOptions', [$option->public_id])
+            ->call('complete')
+            ->assertHasErrors(['signup'])
+            ->assertSee('Some selected Options just became unavailable.')
+            ->assertSet('completed', false);
+
+        $responses[] = $component->get('announcement');
+    }
+
+    expect($responses[0])->toBe($responses[1])
+        ->and(Signup::query()->count())->toBe(1)
+        ->and(OptionClaim::query()->count())->toBe(1)
+        ->and(PendingAccountAssociation::query()->count())->toBe(1)
+        ->and(Account::query()->count())->toBe(2)
+        ->and($option->refresh()->claimed_count)->toBe(1);
+
+    Mail::assertQueued(SignupConfirmationMail::class, function (SignupConfirmationMail $mail): bool {
+        return $mail->hasTo('known@example.com')
+            && $mail->selectionNames === ['Full cleanup crew'];
+    });
+    Mail::assertNotQueued(
+        SignupConfirmationMail::class,
+        fn (SignupConfirmationMail $mail): bool => $mail->hasTo('fresh@example.com'),
+    );
+    Mail::assertQueuedCount(1);
+});
+
+test('existing Account Defaults initialize an isolated Signup snapshot', function () {
     Mail::fake();
 
     $account = Account::factory()->create([
@@ -187,7 +252,7 @@ test('existing Account profile is not overwritten by a pending Signup', function
         'position' => 1,
     ]);
 
-    Livewire::test('complete-unregistered-signup', ['sheetPublicId' => $sheet->public_id])
+    Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
         ->set('name', 'Submitted Snapshot Name')
         ->set('email', ' EXISTING@EXAMPLE.COM ')
         ->set('phone', '555-0222')
@@ -205,11 +270,57 @@ test('existing Account profile is not overwritten by a pending Signup', function
         ->timezone->toBe('America/New_York')
         ->and(Account::query()->where('email', 'existing@example.com')->count())->toBe(1)
         ->and($signup)
-        ->name_snapshot->toBe('Submitted Snapshot Name')
+        ->name_snapshot->toBe('Existing Profile Name')
         ->email_snapshot->toBe('existing@example.com')
-        ->phone_snapshot->toBe('555-0222')
+        ->phone_snapshot->toBe('555-0111')
         ->account_id->toBeNull()
         ->and($signup->pendingAccountAssociation?->account_id)->toBe($account->id);
+
+    $account->update([
+        'name' => 'Later Profile Name',
+        'phone' => '555-0333',
+    ]);
+
+    expect($signup->refresh())
+        ->name_snapshot->toBe('Existing Profile Name')
+        ->email_snapshot->toBe('existing@example.com')
+        ->phone_snapshot->toBe('555-0111');
+});
+
+test('submitted values fill blank existing Account Defaults', function () {
+    Mail::fake();
+
+    $account = Account::factory()->create([
+        'name' => null,
+        'email' => 'blank-defaults@example.com',
+        'phone' => null,
+    ]);
+    $sheet = Sheet::factory()->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_OPEN,
+        'selection_maximum' => 1,
+    ]);
+    $option = $sheet->options()->create([
+        'name' => 'Setup',
+        'capacity' => 1,
+        'position' => 1,
+    ]);
+
+    Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
+        ->set('name', 'Submitted Fallback Name')
+        ->set('email', 'blank-defaults@example.com')
+        ->set('phone', '555-0444')
+        ->set('selectedOptions', [$option->public_id])
+        ->call('complete')
+        ->assertHasNoErrors();
+
+    expect(Signup::query()->sole())
+        ->name_snapshot->toBe('Submitted Fallback Name')
+        ->email_snapshot->toBe('blank-defaults@example.com')
+        ->phone_snapshot->toBe('555-0444')
+        ->and($account->refresh())
+        ->name->toBeNull()
+        ->phone->toBeNull();
 });
 
 test('email-backed completion queues nothing unless its immediate transaction commits', function () {
@@ -234,14 +345,14 @@ test('email-backed completion queues nothing unless its immediate transaction co
         END
         SQL);
 
-    expect(fn () => app(CompleteUnregisteredSignup::class)->handle(
-        $sheet->public_id,
-        'Rollback Participant',
-        '555-0300',
-        [$option->public_id],
-        'rollback@example.com',
-        '192.0.2.10',
-    ))->toThrow(QueryException::class);
+    expect(fn () => app(CompleteOpenSignup::class)->handle(new CompleteSignupInput(
+        sheetPublicId: $sheet->public_id,
+        name: 'Rollback Participant',
+        phone: '555-0300',
+        optionPublicIds: [$option->public_id],
+        email: 'rollback@example.com',
+        ipAddress: '192.0.2.10',
+    )))->toThrow(QueryException::class);
 
     expect(Account::query()->where('email', 'rollback@example.com')->exists())->toBeFalse()
         ->and(Signup::query()->count())->toBe(0)
@@ -251,7 +362,7 @@ test('email-backed completion queues nothing unless its immediate transaction co
     Mail::assertNothingQueued();
 });
 
-test('new and existing Account email submissions expose the same neutral response', function () {
+test('new and existing Accounts receive the same neutral Signup response', function () {
     Mail::fake();
 
     Account::factory()->create([
@@ -273,7 +384,7 @@ test('new and existing Account email submissions expose the same neutral respons
             'position' => 1,
         ]);
 
-        $component = Livewire::test('complete-unregistered-signup', ['sheetPublicId' => $sheet->public_id])
+        $component = Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
             ->set('name', 'Neutral Participant')
             ->set('email', $email)
             ->set('selectedOptions', [$option->public_id])

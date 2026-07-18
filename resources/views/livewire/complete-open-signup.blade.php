@@ -59,10 +59,14 @@
             <legend class="text-sm font-semibold text-stone-800 dark:text-stone-100">{{ __('Available Options') }}</legend>
             <div class="grid gap-3 sm:grid-cols-2">
                 @foreach ($availableOptions as $option)
-                    <label for="signup-option-{{ $option->public_id }}" class="flex min-h-12 cursor-pointer items-center gap-3 border border-stone-300 bg-white/60 px-4 py-3 text-sm font-semibold dark:border-stone-700 dark:bg-stone-950/30">
-                        <input id="signup-option-{{ $option->public_id }}" wire:model="selectedOptions" type="checkbox" value="{{ $option->public_id }}" class="size-5 rounded border-stone-400 text-teal-700 focus:ring-teal-600 dark:border-stone-600 dark:bg-stone-900 dark:text-teal-500">
-                        <span>{{ $option->name }}</span>
-                    </label>
+                    <x-ui.checkbox
+                        wire:model="selectedOptions"
+                        :id="'signup-option-'.$option->public_id"
+                        name="selectedOptions[]"
+                        :value="$option->public_id"
+                        :label="$option->name"
+                        variant="card"
+                    />
                 @endforeach
             </div>
             @if ($errors->has('selectedOptions') || $errors->has('signup'))

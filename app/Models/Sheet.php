@@ -91,6 +91,13 @@ class Sheet extends Model
         $query->where('state', '!=', self::STATE_ARCHIVED);
     }
 
+    public function isAcceptingSignups(): bool
+    {
+        return $this->state === self::STATE_PUBLISHED
+            && $this->participation_policy === self::PARTICIPATION_OPEN
+            && $this->deadline_at->isFuture();
+    }
+
     public function getRouteKeyName(): string
     {
         return 'public_id';

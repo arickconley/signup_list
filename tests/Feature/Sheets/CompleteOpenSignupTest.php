@@ -4,7 +4,42 @@ use App\Models\Account;
 use App\Models\Sheet;
 use App\Models\Signup;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
+use Illuminate\Support\Facades\Blade;
 use Livewire\Livewire;
+
+test('Signup Sheet acceptance requires Published Open Participation before its deadline', function (array $attributes, bool $expected) {
+    $sheet = Sheet::factory()->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_OPEN,
+        'deadline_at' => now()->addHour(),
+        ...$attributes,
+    ]);
+
+    expect($sheet->isAcceptingSignups())->toBe($expected);
+})->with([
+    'accepting' => [[], true],
+    'Draft Sheet' => [['state' => Sheet::STATE_DRAFT], false],
+    'Verified Participation' => [['participation_policy' => 'verified'], false],
+    'past deadline' => [['deadline_at' => now()->subSecond()], false],
+]);
+
+test('card checkbox supports an accessible id and Option value', function () {
+    $html = Blade::render(<<<'BLADE'
+        <x-ui.checkbox
+            id="signup-option-choice"
+            name="selectedOptions"
+            value="0198a24e-13d4-73b8-a54e-6d68e290c834"
+            label="Morning setup"
+            variant="card"
+        />
+        BLADE);
+
+    expect(str_contains($html, 'for="signup-option-choice"'))->toBeTrue()
+        ->and(str_contains($html, 'id="signup-option-choice"'))->toBeTrue()
+        ->and(str_contains($html, 'value="0198a24e-13d4-73b8-a54e-6d68e290c834"'))->toBeTrue()
+        ->and(str_contains($html, 'border-stone-300'))->toBeTrue()
+        ->and(str_contains($html, 'value="1"'))->toBeFalse();
+});
 
 test('Open Published Sheet offers an Unregistered Participant signup', function () {
     $sheet = Sheet::factory()->create([
@@ -68,7 +103,7 @@ test('Unregistered Participant completes a Signup without creating an Account', 
     ]);
     $accountCount = Account::query()->count();
 
-    Livewire::test('complete-unregistered-signup', ['sheetPublicId' => $sheet->public_id])
+    Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
         ->set('name', '  Jordan Lee  ')
         ->set('phone', '  555-0102  ')
         ->set('selectedOptions', [$option->public_id])
@@ -105,7 +140,7 @@ test('Unregistered Participant may omit a phone number', function () {
         'position' => 1,
     ]);
 
-    Livewire::test('complete-unregistered-signup', ['sheetPublicId' => $sheet->public_id])
+    Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
         ->set('name', 'Casey North')
         ->set('phone', '')
         ->set('selectedOptions', [$option->public_id])
@@ -132,13 +167,13 @@ test('Signup validates required identity and selection maximum on the server', f
         'position' => 2,
     ]);
 
-    Livewire::test('complete-unregistered-signup', ['sheetPublicId' => $sheet->public_id])
+    Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
         ->set('name', '   ')
         ->set('selectedOptions', [])
         ->call('complete')
         ->assertHasErrors(['name', 'selectedOptions']);
 
-    Livewire::test('complete-unregistered-signup', ['sheetPublicId' => $sheet->public_id])
+    Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
         ->set('name', 'Morgan Reed')
         ->set('selectedOptions', [$firstOption->public_id, $secondOption->public_id])
         ->call('complete')
@@ -167,7 +202,7 @@ test('capacity race names newly unavailable Options and preserves recoverable in
         'position' => 2,
     ]);
 
-    $component = Livewire::test('complete-unregistered-signup', ['sheetPublicId' => $sheet->public_id])
+    $component = Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
         ->set('name', 'Avery Stone')
         ->set('phone', '555-0177')
         ->set('selectedOptions', [$option->public_id, $stillAvailable->public_id]);
@@ -205,7 +240,7 @@ test('server rejects a forged Option from another Signup Sheet', function () {
         'position' => 1,
     ]);
 
-    Livewire::test('complete-unregistered-signup', ['sheetPublicId' => $sheet->public_id])
+    Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
         ->set('name', 'Taylor Quinn')
         ->set('selectedOptions', [$foreignOption->public_id])
         ->call('complete')
@@ -227,7 +262,7 @@ test('server revalidates Published and open state after the form was rendered', 
         'capacity' => 1,
         'position' => 1,
     ]);
-    $component = Livewire::test('complete-unregistered-signup', ['sheetPublicId' => $sheet->public_id])
+    $component = Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
         ->set('name', 'Riley West')
         ->set('selectedOptions', [$option->public_id]);
 
@@ -259,7 +294,7 @@ test('hidden honeypot discards an automated Signup', function () {
         'position' => 1,
     ]);
 
-    Livewire::test('complete-unregistered-signup', ['sheetPublicId' => $sheet->public_id])
+    Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
         ->set('name', 'Automated Visitor')
         ->set('selectedOptions', [$option->public_id])
         ->set('website', 'https://spam.example')
@@ -284,14 +319,14 @@ test('Signup attempts are throttled independently per Sheet and IP', function ()
     ]);
 
     foreach (range(1, 5) as $attempt) {
-        Livewire::test('complete-unregistered-signup', ['sheetPublicId' => $sheet->public_id])
+        Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
             ->set('name', 'Participant '.$attempt)
             ->set('selectedOptions', [$option->public_id])
             ->call('complete')
             ->assertHasNoErrors();
     }
 
-    Livewire::test('complete-unregistered-signup', ['sheetPublicId' => $sheet->public_id])
+    Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
         ->set('name', 'Throttled Participant')
         ->set('selectedOptions', [$option->public_id])
         ->call('complete')
@@ -340,7 +375,7 @@ test('Signup attempts are throttled independently per Sheet and IP', function ()
         'position' => 1,
     ]);
 
-    Livewire::test('complete-unregistered-signup', ['sheetPublicId' => $otherSheet->public_id])
+    Livewire::test('complete-open-signup', ['sheetPublicId' => $otherSheet->public_id])
         ->set('name', 'Same IP, other Sheet')
         ->set('selectedOptions', [$otherOption->public_id])
         ->call('complete')

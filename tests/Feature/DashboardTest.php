@@ -41,45 +41,45 @@ test('verified Accounts complete their profile before using other settings', fun
         ->assertRedirect(route('profile.edit'));
 });
 
-test('Account dashboard lists only attached non-archived joined Signup Sheets and current selections', function () {
+test('Account dashboard lists only attached Signups on non-archived Signup Sheets and current Option Claims', function () {
     $account = Account::factory()->create();
     $otherAccount = Account::factory()->create();
 
-    $joinedSheet = Sheet::factory()->create([
-        'title' => 'Joined Garden Day',
+    $attachedSheet = Sheet::factory()->create([
+        'title' => 'Attached Garden Day',
         'state' => Sheet::STATE_PUBLISHED,
     ]);
-    $joinedOption = $joinedSheet->options()->create([
+    $attachedOption = $attachedSheet->options()->create([
         'name' => 'Welcome Table',
         'capacity' => 2,
         'claimed_count' => 1,
         'position' => 1,
     ]);
-    $joinedSignup = $joinedSheet->signups()->create([
+    $attachedSignup = $attachedSheet->signups()->create([
         'name_snapshot' => 'Dashboard Participant',
         'email_snapshot' => $account->email,
     ]);
-    $joinedSignup->forceFill(['account_id' => $account->id])->save();
-    $joinedSignup->optionClaims()->create(['option_id' => $joinedOption->id]);
+    $attachedSignup->forceFill(['account_id' => $account->id])->save();
+    $attachedSignup->optionClaims()->create(['option_id' => $attachedOption->id]);
 
-    $olderJoinedSheet = Sheet::factory()->create([
-        'title' => 'Older Joined Sheet',
+    $olderAttachedSheet = Sheet::factory()->create([
+        'title' => 'Older Attached Sheet',
         'state' => Sheet::STATE_PUBLISHED,
     ]);
-    $olderJoinedSignup = $olderJoinedSheet->signups()->create([
+    $olderAttachedSignup = $olderAttachedSheet->signups()->create([
         'name_snapshot' => 'Older Dashboard Participant',
     ]);
-    $olderJoinedSignup->forceFill([
+    $olderAttachedSignup->forceFill([
         'account_id' => $account->id,
         'created_at' => now()->subDay(),
     ])->save();
 
-    $pendingSheet = Sheet::factory()->create(['title' => 'Pending Private Sheet']);
-    $pendingSignup = $pendingSheet->signups()->create([
+    $pendingAssociationSheet = Sheet::factory()->create(['title' => 'Pending Association Sheet']);
+    $signupWithPendingAccountAssociation = $pendingAssociationSheet->signups()->create([
         'name_snapshot' => 'Pending Participant',
         'email_snapshot' => 'pending-dashboard@example.com',
     ]);
-    $pendingSignup->pendingAccountAssociation()->create(['account_id' => $account->id]);
+    $signupWithPendingAccountAssociation->pendingAccountAssociation()->create(['account_id' => $account->id]);
 
     $archivedSheet = Sheet::factory()->create([
         'title' => 'Archived Private Sheet',
@@ -106,14 +106,16 @@ test('Account dashboard lists only attached non-archived joined Signup Sheets an
 
     $response
         ->assertOk()
-        ->assertSee('Joined Sheets')
-        ->assertSee('Joined Garden Day')
-        ->assertSee('Older Joined Sheet')
-        ->assertSeeInOrder(['Joined Garden Day', 'Older Joined Sheet'])
+        ->assertSee('Your Signups')
+        ->assertSee('Joined Signup Sheets')
+        ->assertSeeHtml('<span class="text-xs font-bold uppercase tracking-[0.16em] text-amber-700 dark:text-amber-400">Signup</span>')
+        ->assertSee('Attached Garden Day')
+        ->assertSee('Older Attached Sheet')
+        ->assertSeeInOrder(['Attached Garden Day', 'Older Attached Sheet'])
         ->assertSee('Dashboard Participant')
         ->assertSee('Welcome Table')
-        ->assertSeeHtml('href="'.route('sheets.show', $joinedSheet, absolute: false).'"')
-        ->assertDontSee('Pending Private Sheet')
+        ->assertSeeHtml('href="'.route('sheets.show', $attachedSheet, absolute: false).'"')
+        ->assertDontSee('Pending Association Sheet')
         ->assertDontSee('Archived Private Sheet')
         ->assertDontSee('Other Account Sheet');
 });

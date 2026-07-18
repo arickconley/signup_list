@@ -2,7 +2,8 @@
 
 namespace App\Livewire;
 
-use App\Actions\CompleteUnregisteredSignup as CompleteSignup;
+use App\Actions\CompleteOpenSignup as CompleteSignup;
+use App\Data\CompleteSignupInput;
 use App\Exceptions\CannotCompleteSignup;
 use App\Models\Account;
 use App\Models\Sheet;
@@ -11,7 +12,7 @@ use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 
-class CompleteUnregisteredSignup extends Component
+class CompleteOpenSignup extends Component
 {
     #[Locked]
     public string $sheetPublicId = '';
@@ -40,11 +41,9 @@ class CompleteUnregisteredSignup extends Component
     {
         $sheet = Sheet::query()
             ->where('public_id', $sheetPublicId)
-            ->where('state', Sheet::STATE_PUBLISHED)
-            ->where('participation_policy', Sheet::PARTICIPATION_OPEN)
             ->firstOrFail();
 
-        abort_unless($sheet->deadline_at->isFuture(), 404);
+        abort_unless($sheet->isAcceptingSignups(), 404);
 
         $this->sheetPublicId = $sheetPublicId;
     }
@@ -88,14 +87,14 @@ class CompleteUnregisteredSignup extends Component
         RateLimiter::hit($rateLimitKey, 60);
 
         try {
-            $result = $completeSignup->handle(
-                $this->sheetPublicId,
-                $this->name,
-                $this->phone === '' ? null : $this->phone,
-                $this->selectedOptions,
-                $this->email === '' ? null : $this->email,
-                request()->ip() ?? 'unknown',
-            );
+            $result = $completeSignup->handle(new CompleteSignupInput(
+                sheetPublicId: $this->sheetPublicId,
+                name: $this->name,
+                phone: $this->phone === '' ? null : $this->phone,
+                optionPublicIds: $this->selectedOptions,
+                email: $this->email === '' ? null : $this->email,
+                ipAddress: request()->ip() ?? 'unknown',
+            ));
         } catch (CannotCompleteSignup $exception) {
             $this->unavailableOptionNames = $exception->unavailableOptionNames;
             $this->selectedOptions = array_values(array_diff(
@@ -126,9 +125,7 @@ class CompleteUnregisteredSignup extends Component
             ->where('public_id', $this->sheetPublicId)
             ->firstOrFail();
 
-        $acceptingSignups = $sheet->state === Sheet::STATE_PUBLISHED
-            && $sheet->participation_policy === Sheet::PARTICIPATION_OPEN
-            && $sheet->deadline_at->isFuture();
+        $acceptingSignups = $sheet->isAcceptingSignups();
 
         $availableOptions = $acceptingSignups
             ? $sheet->options()
@@ -137,7 +134,7 @@ class CompleteUnregisteredSignup extends Component
                 ->get(['public_id', 'name'])
             : collect();
 
-        return view('livewire.complete-unregistered-signup', [
+        return view('livewire.complete-open-signup', [
             'availableOptions' => $availableOptions,
             'selectionMaximum' => $sheet->selection_maximum,
             'acceptingSignups' => $acceptingSignups,

@@ -36,6 +36,10 @@ final class ImmediateDatabaseTransaction
 
         $pdo = $connection->getPdo();
 
+        if ($pdo->inTransaction()) {
+            return $callback();
+        }
+
         for ($attempt = 1; $attempt <= self::LOCK_ATTEMPTS; $attempt++) {
             $transactionStarted = false;
 

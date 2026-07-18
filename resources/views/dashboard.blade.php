@@ -11,7 +11,7 @@
             </a>
         </div>
 
-        @if ($drafts->isEmpty() && $joinedSignups->isEmpty())
+        @if ($drafts->isEmpty() && $attachedSignups->isEmpty())
             <section class="paper-grid mt-8 rounded-2xl border border-dashed border-stone-300 bg-stone-50 px-6 py-14 text-center dark:border-stone-700 dark:bg-stone-900/60" aria-labelledby="empty-sheets-title">
                 <span class="mx-auto flex size-14 items-center justify-center rounded-2xl bg-amber-200 text-amber-950 shadow-sm dark:bg-amber-300">
                     <x-app-logo-icon class="size-8" />
@@ -36,17 +36,17 @@
             </section>
         @endif
 
-        @if ($joinedSignups->isNotEmpty())
-            <section class="mt-10" aria-labelledby="joined-sheets-title">
+        @if ($attachedSignups->isNotEmpty())
+            <section class="mt-10" aria-labelledby="attached-signups-title">
                 <div>
-                    <p class="text-xs font-bold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-400">{{ __('Your commitments') }}</p>
-                    <h2 id="joined-sheets-title" class="mt-2 font-display text-2xl font-semibold">{{ __('Joined Sheets') }}</h2>
+                    <p class="text-xs font-bold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-400">{{ __('Your Signups') }}</p>
+                    <h2 id="attached-signups-title" class="mt-2 font-display text-2xl font-semibold">{{ __('Joined Signup Sheets') }}</h2>
                 </div>
 
                 <div class="mt-4 grid gap-4 sm:grid-cols-2">
-                    @foreach ($joinedSignups as $signup)
+                    @foreach ($attachedSignups as $signup)
                         <a href="{{ route('sheets.show', $signup->sheet, absolute: false) }}" wire:navigate class="group rounded-2xl border border-stone-200 bg-white p-5 shadow-sm transition hover:border-amber-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 dark:border-stone-800 dark:bg-stone-900 dark:hover:border-amber-400">
-                            <span class="text-xs font-bold uppercase tracking-[0.16em] text-amber-700 dark:text-amber-400">{{ __('Joined') }}</span>
+                            <span class="text-xs font-bold uppercase tracking-[0.16em] text-amber-700 dark:text-amber-400">{{ __('Signup') }}</span>
                             <h3 class="mt-2 font-display text-xl font-semibold group-hover:text-amber-800 dark:group-hover:text-amber-300">{{ $signup->sheet->title }}</h3>
                             <p class="mt-2 text-sm text-stone-600 dark:text-stone-400">
                                 {{ __('Signed up as :name', ['name' => $signup->name_snapshot]) }}

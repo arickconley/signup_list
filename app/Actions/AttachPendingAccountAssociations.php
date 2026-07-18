@@ -18,7 +18,7 @@ final class AttachPendingAccountAssociations
     public function handle(Account $account): void
     {
         $this->immediateTransaction->run(function () use ($account): void {
-            $currentAccount = Account::query()->find($account->getKey());
+            $currentAccount = Account::query()->whereKey($account->getKey())->first();
 
             if ($currentAccount === null || ! $currentAccount->hasVerifiedEmail()) {
                 return;

@@ -22,7 +22,7 @@
                     <div>
                         <p class="text-xs font-bold uppercase tracking-[0.2em] text-teal-700 dark:text-teal-400">{{ __('Bring something. Help out. Show up.') }}</p>
                         <h1 class="mt-5 max-w-3xl font-display text-5xl font-semibold leading-[1.02] tracking-tight sm:text-6xl lg:text-7xl">{{ __('Simple signups for real communities.') }}</h1>
-                        <p class="mt-6 max-w-xl text-lg leading-8 text-stone-600 dark:text-stone-300">{{ __('Make a list, share one private link, and let people claim what they can bring—without forcing everyone to create an account.') }}</p>
+                        <p class="mt-6 max-w-xl text-lg leading-8 text-stone-600 dark:text-stone-300">{{ __('Make a Signup Sheet, share one private link, and let people claim what they can bring—without forcing everyone to create an account.') }}</p>
                         <div class="mt-8 flex flex-wrap gap-3">
                             @auth
                                 <a href="{{ route('dashboard') }}" class="inline-flex min-h-12 items-center rounded-lg bg-teal-700 px-5 font-semibold text-white shadow-sm hover:bg-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2 dark:bg-teal-500 dark:text-stone-950 dark:hover:bg-teal-400">{{ __('Open dashboard') }}</a>

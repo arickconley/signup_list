@@ -21,9 +21,9 @@ class DashboardController extends Controller
                 ->where('state', Sheet::STATE_DRAFT)
                 ->latest()
                 ->get(),
-            'joinedSignups' => $account->signups()
+            'attachedSignups' => $account->signups()
                 ->whereHas('sheet', function (Builder $query): void {
-                    $query->notArchived();
+                    $query->where('state', '!=', Sheet::STATE_ARCHIVED);
                 })
                 ->with(['sheet', 'optionClaims.option'])
                 ->latest('created_at')

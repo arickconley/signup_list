@@ -36,7 +36,7 @@ test('separate processes competing for the final unit produce exactly one Signup
         ]);
         DB::disconnect('sqlite');
 
-        $fixture = base_path('tests/Fixtures/complete-unregistered-signup.php');
+        $fixture = base_path('tests/Fixtures/complete-open-signup.php');
         $processes = [
             new Process([
                 PHP_BINARY,
