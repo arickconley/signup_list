@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Database\Factories\SheetFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -53,6 +54,8 @@ class Sheet extends Model
 
     public const string STATE_PUBLISHED = 'published';
 
+    public const string STATE_ARCHIVED = 'archived';
+
     public const string PARTICIPATION_OPEN = 'open';
 
     public const string VISIBILITY_OWNER_ONLY = 'owner_only';
@@ -80,6 +83,12 @@ class Sheet extends Model
     public function signups(): HasMany
     {
         return $this->hasMany(Signup::class);
+    }
+
+    /** @param  Builder<Sheet>  $query */
+    public function scopeNotArchived(Builder $query): void
+    {
+        $query->where('state', '!=', self::STATE_ARCHIVED);
     }
 
     public function getRouteKeyName(): string

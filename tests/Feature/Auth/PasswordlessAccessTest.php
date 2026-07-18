@@ -4,6 +4,8 @@ use App\Actions\ChangeAccountPassword;
 use App\Mail\AccountAccessMail;
 use App\Models\Account;
 use App\Models\AccountAccessChallenge;
+use App\Models\PendingAccountAssociation;
+use App\Models\Sheet;
 use Illuminate\Contracts\Queue\ShouldBeEncrypted;
 use Illuminate\Contracts\Queue\ShouldQueueAfterCommit;
 use Illuminate\Database\QueryException;
@@ -257,6 +259,131 @@ test('verification reuses the normalized Account email', function () {
     expect($account->fresh()->hasVerifiedEmail())->toBeTrue()
         ->and($account->fresh()->password)->not->toBeNull()
         ->and(Account::query()->count())->toBe(1);
+});
+
+test('passwordless code attaches a normalized-email Pending Account Association', function () {
+    Mail::fake();
+    $account = Account::factory()->unverified()->create([
+        'email' => 'participant@example.com',
+    ]);
+    $sheet = Sheet::factory()->create();
+    $option = $sheet->options()->create([
+        'name' => 'Proof Selection',
+        'capacity' => 2,
+        'claimed_count' => 1,
+        'position' => 1,
+    ]);
+    $signup = $sheet->signups()->create([
+        'name_snapshot' => 'Participant Snapshot',
+        'email_snapshot' => 'participant@example.com',
+        'phone_snapshot' => '555-0144',
+        'name_consent' => true,
+        'email_consent' => false,
+        'phone_consent' => true,
+    ]);
+    $association = $signup->pendingAccountAssociation()->create([
+        'account_id' => $account->id,
+    ]);
+    $claim = $signup->optionClaims()->create(['option_id' => $option->id]);
+    $snapshots = $signup->only([
+        'name_snapshot',
+        'email_snapshot',
+        'phone_snapshot',
+        'name_consent',
+        'email_consent',
+        'phone_consent',
+    ]);
+
+    $this->post('/access', ['email' => '  PARTICIPANT@Example.COM  ']);
+    $this->post('/access/code', ['code' => codeFromAccountAccessMail()])
+        ->assertRedirect(route('dashboard'));
+
+    $this->assertAuthenticatedAs($account);
+    expect($signup->refresh()->account_id)->toBe($account->id)
+        ->and($signup->only(array_keys($snapshots)))->toBe($snapshots)
+        ->and($signup->optionClaims()->pluck('id')->all())->toBe([$claim->id])
+        ->and($option->refresh()->claimed_count)->toBe(1)
+        ->and(PendingAccountAssociation::query()->find($association->id))->toBeNull();
+});
+
+test('passwordless magic link attaches for an already-verified Account', function () {
+    Mail::fake();
+    $account = Account::factory()->create([
+        'email' => 'verified@example.com',
+    ]);
+    $signup = Sheet::factory()->create()->signups()->create([
+        'name_snapshot' => 'Verified Participant',
+        'email_snapshot' => 'verified@example.com',
+    ]);
+    $association = $signup->pendingAccountAssociation()->create([
+        'account_id' => $account->id,
+    ]);
+
+    $this->post('/access', ['email' => 'verified@example.com']);
+    $this->get(magicLinkFromAccountAccessMail())
+        ->assertRedirect(route('dashboard'));
+
+    $this->assertAuthenticatedAs($account);
+    expect($signup->refresh()->account_id)->toBe($account->id)
+        ->and(PendingAccountAssociation::query()->find($association->id))->toBeNull();
+});
+
+test('passwordless verification succeeds neutrally when Account and Signup Sheet conflict', function () {
+    Mail::fake();
+    $account = Account::factory()->create([
+        'email' => 'conflict@example.com',
+    ]);
+    $sheet = Sheet::factory()->create();
+    $existingOption = $sheet->options()->create([
+        'name' => 'Private Existing Selection',
+        'capacity' => 2,
+        'claimed_count' => 1,
+        'position' => 1,
+    ]);
+    $candidateOption = $sheet->options()->create([
+        'name' => 'Pending Selection',
+        'capacity' => 2,
+        'claimed_count' => 1,
+        'position' => 2,
+    ]);
+    $existingSignup = $sheet->signups()->create([
+        'name_snapshot' => 'Private Existing Participant',
+        'email_snapshot' => 'prior@example.com',
+    ]);
+    $existingSignup->forceFill(['account_id' => $account->id])->save();
+    $existingClaim = $existingSignup->optionClaims()->create([
+        'option_id' => $existingOption->id,
+    ]);
+    $candidateSignup = $sheet->signups()->create([
+        'name_snapshot' => 'Pending Participant',
+        'email_snapshot' => 'conflict@example.com',
+    ]);
+    $candidateAssociation = $candidateSignup->pendingAccountAssociation()->create([
+        'account_id' => $account->id,
+    ]);
+    $candidateClaim = $candidateSignup->optionClaims()->create([
+        'option_id' => $candidateOption->id,
+    ]);
+
+    $this->post('/access', ['email' => 'conflict@example.com']);
+    $response = $this->post('/access/code', ['code' => codeFromAccountAccessMail()]);
+
+    $response
+        ->assertRedirect(route('dashboard'))
+        ->assertSessionHasNoErrors()
+        ->assertDontSee('Private Existing Participant')
+        ->assertDontSee('Pending Participant')
+        ->assertDontSee((string) $existingSignup->id)
+        ->assertDontSee((string) $candidateSignup->id);
+    $this->assertAuthenticatedAs($account);
+
+    expect($existingSignup->refresh()->account_id)->toBe($account->id)
+        ->and($candidateSignup->refresh()->account_id)->toBeNull()
+        ->and(PendingAccountAssociation::query()->find($candidateAssociation->id))->not->toBeNull()
+        ->and($existingSignup->optionClaims()->pluck('id')->all())->toBe([$existingClaim->id])
+        ->and($candidateSignup->optionClaims()->pluck('id')->all())->toBe([$candidateClaim->id])
+        ->and($existingOption->refresh()->claimed_count)->toBe(1)
+        ->and($candidateOption->refresh()->claimed_count)->toBe(1);
 });
 
 test('access credentials persist only as hashes and queued delivery is encrypted after commit', function () {

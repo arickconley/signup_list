@@ -4,12 +4,17 @@ namespace App\Actions;
 
 use App\Models\Account;
 use App\Models\AccountAccessChallenge;
+use App\Support\ImmediateDatabaseTransaction;
 use Illuminate\Auth\Events\Verified;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 class ConsumeAccountAccessChallenge
 {
+    public function __construct(
+        private readonly ImmediateDatabaseTransaction $immediateTransaction,
+        private readonly AttachPendingAccountAssociations $attachPendingAccountAssociations,
+    ) {}
+
     public function usingCode(string $publicId, string $code): ?Account
     {
         return $this->consume($publicId, $code, 'code_hash');
@@ -22,7 +27,7 @@ class ConsumeAccountAccessChallenge
 
     private function consume(string $publicId, string $secret, string $hashColumn): ?Account
     {
-        return DB::transaction(function () use ($publicId, $secret, $hashColumn): ?Account {
+        return $this->immediateTransaction->run(function () use ($publicId, $secret, $hashColumn): ?Account {
             $challenge = AccountAccessChallenge::query()
                 ->where('public_id', $publicId)
                 ->first();
@@ -49,8 +54,15 @@ class ConsumeAccountAccessChallenge
                 ['name' => null, 'password' => null],
             );
 
-            if (! $account->hasVerifiedEmail()) {
+            $newlyVerified = ! $account->hasVerifiedEmail();
+
+            if ($newlyVerified) {
                 $account->markEmailAsVerified();
+            }
+
+            $this->attachPendingAccountAssociations->handle($account);
+
+            if ($newlyVerified) {
                 event(new Verified($account));
             }
 

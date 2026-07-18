@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Account;
 use App\Models\Sheet;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 
 class DashboardController extends Controller
@@ -19,6 +20,14 @@ class DashboardController extends Controller
             'drafts' => $account->ownedSheets()
                 ->where('state', Sheet::STATE_DRAFT)
                 ->latest()
+                ->get(),
+            'joinedSignups' => $account->signups()
+                ->whereHas('sheet', function (Builder $query): void {
+                    $query->notArchived();
+                })
+                ->with(['sheet', 'optionClaims.option'])
+                ->latest('created_at')
+                ->latest('id')
                 ->get(),
         ]);
     }
