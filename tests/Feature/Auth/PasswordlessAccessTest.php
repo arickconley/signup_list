@@ -151,7 +151,7 @@ test('email verification establishes fresh authentication', function () {
     $this->post('/access', ['email' => 'alice@example.com']);
 
     $this->post('/access/code', ['code' => codeFromAccountAccessMail()])
-        ->assertRedirect(route('dashboard'))
+        ->assertRedirect(route('profile.edit'))
         ->assertSessionHas('auth.password_confirmed_at', now()->timestamp);
 });
 
