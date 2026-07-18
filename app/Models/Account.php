@@ -56,6 +56,18 @@ class Account extends Authenticatable implements MustVerifyEmailContract, Passke
         return $this->hasMany(Sheet::class, 'owner_id');
     }
 
+    /** @return HasMany<Signup, $this> */
+    public function signups(): HasMany
+    {
+        return $this->hasMany(Signup::class, 'account_id');
+    }
+
+    /** @return HasMany<PendingAccountAssociation, $this> */
+    public function pendingAccountAssociations(): HasMany
+    {
+        return $this->hasMany(PendingAccountAssociation::class, 'account_id');
+    }
+
     /**
      * Retain the foreign key used by the legacy users schema and framework integrations.
      */

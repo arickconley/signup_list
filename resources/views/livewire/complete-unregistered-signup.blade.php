@@ -16,9 +16,15 @@
             <p class="mt-1">{{ $errors->first('signup') ?: __('This Signup Sheet is no longer open for signups.') }}</p>
         </x-ui.callout>
     @elseif ($completed)
-        <x-ui.callout class="mt-7 max-w-3xl" :heading="__('Signup complete')">
-            <p class="mt-1">{{ __('Your Option claims are confirmed. This Signup cannot be edited or cancelled without an account.') }}</p>
-        </x-ui.callout>
+        @if ($checkEmail)
+            <x-ui.callout class="mt-7 max-w-3xl" :heading="__('Check your email')">
+                <p class="mt-1">{{ __('If the address can receive email, confirmation and an access link are on the way.') }}</p>
+            </x-ui.callout>
+        @else
+            <x-ui.callout class="mt-7 max-w-3xl" :heading="__('Signup complete')">
+                <p class="mt-1">{{ __('Your Option claims are confirmed. This Signup cannot be edited or cancelled without an account.') }}</p>
+            </x-ui.callout>
+        @endif
     @elseif (! $hasAvailableOptions)
         <x-ui.callout class="mt-7 max-w-3xl" :heading="__('No Options available')">
             <p class="mt-1">{{ __('All Options are currently unavailable.') }}</p>
@@ -45,6 +51,7 @@
 
         <div class="grid gap-6 sm:grid-cols-2">
             <x-ui.input wire:model="name" name="name" :label="__('Your name')" type="text" autocomplete="name" required />
+            <x-ui.input wire:model="email" name="email" :label="__('Email')" type="email" autocomplete="email" :description="__('Optional. Adds passwordless access after verification.')" />
             <x-ui.input wire:model="phone" name="phone" :label="__('Phone')" type="tel" autocomplete="tel" :description="__('Optional.')" />
         </div>
 

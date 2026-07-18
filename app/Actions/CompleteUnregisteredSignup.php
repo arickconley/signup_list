@@ -2,20 +2,27 @@
 
 namespace App\Actions;
 
+use App\Data\CompleteSignupResult;
 use App\Exceptions\CannotCompleteSignup;
+use App\Exceptions\ImmediateTransactionBusy;
+use App\Mail\SignupConfirmationMail;
+use App\Models\Account;
 use App\Models\Option;
+use App\Models\OptionClaim;
 use App\Models\Sheet;
 use App\Models\Signup;
-use Closure;
-use Illuminate\Database\Connection;
+use App\Support\AccountAccessAbuseControl;
+use App\Support\ImmediateDatabaseTransaction;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
-use PDOException;
-use Throwable;
 
 class CompleteUnregisteredSignup
 {
-    private const int LOCK_ATTEMPTS = 3;
+    public function __construct(
+        private readonly ImmediateDatabaseTransaction $immediateTransaction,
+        private readonly IssueAccountAccessChallenge $issueAccountAccessChallenge,
+        private readonly AccountAccessAbuseControl $abuseControl,
+    ) {}
 
     /**
      * @param  array<int, string>  $optionPublicIds
@@ -25,33 +32,82 @@ class CompleteUnregisteredSignup
         string $name,
         ?string $phone,
         array $optionPublicIds,
-    ): Signup {
+        ?string $email = null,
+        string $ipAddress = 'unknown',
+    ): CompleteSignupResult {
         $connection = DB::connection();
 
         if ($connection->getDriverName() !== 'sqlite') {
             throw new CannotCompleteSignup('Signups are temporarily unavailable. Please try again.');
         }
 
-        return $this->immediateTransaction(
-            $connection,
-            fn (): Signup => $this->createSignup(
-                $sheetPublicId,
-                $name,
-                $phone,
-                $optionPublicIds,
+        $normalizedEmail = filled($email) ? Account::normalizeEmail($email) : null;
+
+        try {
+            $writeResult = $this->immediateTransaction->run(
+                fn (): array => $this->createSignup(
+                    $sheetPublicId,
+                    $name,
+                    $phone,
+                    $optionPublicIds,
+                    $normalizedEmail,
+                ),
+            );
+        } catch (ImmediateTransactionBusy $exception) {
+            throw new CannotCompleteSignup(
+                'The signup list is busy. Please wait a moment and try again.',
+                previous: $exception,
+            );
+        }
+
+        $signup = $writeResult['signup'];
+
+        if ($normalizedEmail === null) {
+            return new CompleteSignupResult(checkEmail: false);
+        }
+
+        if ($writeResult['duplicate'] && ! $this->abuseControl->attemptSend($normalizedEmail, $ipAddress)) {
+            return new CompleteSignupResult(checkEmail: true);
+        }
+
+        $sheet = $signup->sheet()->firstOrFail(['public_id', 'title']);
+        $selectionNames = array_values($signup->optionClaims()
+            ->with('option')
+            ->get()
+            ->sortBy(fn (OptionClaim $claim): int => $claim->option->position)
+            ->map(fn (OptionClaim $claim): string => $claim->option->name)
+            ->all());
+        $sheetUrl = route('sheets.show', $sheet);
+
+        $challenge = $this->issueAccountAccessChallenge->handle(
+            $normalizedEmail,
+            fn (string $code, string $magicLink, CarbonInterface $expiresAt): SignupConfirmationMail => new SignupConfirmationMail(
+                sheetTitle: $sheet->title,
+                sheetUrl: $sheetUrl,
+                selectionNames: $selectionNames,
+                code: $code,
+                magicLink: $magicLink,
+                expiresAt: $expiresAt->toIso8601String(),
             ),
+        );
+
+        return new CompleteSignupResult(
+            checkEmail: true,
+            accessChallengePublicId: $challenge->public_id,
         );
     }
 
     /**
      * @param  array<int, string>  $optionPublicIds
+     * @return array{signup: Signup, duplicate: bool}
      */
     private function createSignup(
         string $sheetPublicId,
         string $name,
         ?string $phone,
         array $optionPublicIds,
-    ): Signup {
+        ?string $email,
+    ): array {
         $sheet = Sheet::query()->where('public_id', $sheetPublicId)->first();
 
         if (
@@ -87,6 +143,17 @@ class CompleteUnregisteredSignup
             throw new CannotCompleteSignup('One or more selected Options do not belong to this Signup Sheet.');
         }
 
+        if ($email !== null) {
+            $existingSignup = Signup::query()
+                ->where('sheet_id', $sheet->id)
+                ->where('email_snapshot', $email)
+                ->first();
+
+            if ($existingSignup !== null) {
+                return ['signup' => $existingSignup, 'duplicate' => true];
+            }
+        }
+
         $unavailableOptions = $options->filter(
             fn (Option $option): bool => $option->claimed_count >= $option->capacity,
         );
@@ -99,10 +166,27 @@ class CompleteUnregisteredSignup
             );
         }
 
+        if ($email !== null) {
+            $account = Account::query()->firstOrCreate(
+                ['email' => $email],
+                [
+                    'name' => $name,
+                    'phone' => $phone,
+                    'password' => null,
+                    'timezone' => null,
+                ],
+            );
+        }
+
         $signup = $sheet->signups()->create([
             'name_snapshot' => $name,
+            'email_snapshot' => $email,
             'phone_snapshot' => $phone,
         ]);
+
+        if (isset($account)) {
+            $signup->pendingAccountAssociation()->create(['account_id' => $account->id]);
+        }
 
         foreach ($options as $option) {
             $updated = Option::query()
@@ -121,79 +205,6 @@ class CompleteUnregisteredSignup
             $signup->optionClaims()->create(['option_id' => $option->id]);
         }
 
-        return $signup;
-    }
-
-    /** @param  Closure(): Signup  $callback */
-    private function immediateTransaction(Connection $connection, Closure $callback): Signup
-    {
-        if ($connection->transactionLevel() > 0) {
-            return $connection->transaction(
-                fn (Connection $_connection): Signup => $callback(),
-            );
-        }
-
-        $pdo = $connection->getPdo();
-
-        for ($attempt = 1; $attempt <= self::LOCK_ATTEMPTS; $attempt++) {
-            $transactionStarted = false;
-
-            try {
-                $pdo->exec('BEGIN IMMEDIATE TRANSACTION');
-                $transactionStarted = true;
-                $signup = $callback();
-                $pdo->exec('COMMIT');
-
-                return $signup;
-            } catch (Throwable $exception) {
-                if ($transactionStarted) {
-                    try {
-                        $pdo->exec('ROLLBACK');
-                    } catch (Throwable) {
-                        // Preserve the exception that caused the transaction to fail.
-                    }
-                }
-
-                if (! $this->isLockContention($exception)) {
-                    throw $exception;
-                }
-
-                if ($attempt === self::LOCK_ATTEMPTS) {
-                    throw new CannotCompleteSignup(
-                        'The signup list is busy. Please wait a moment and try again.',
-                        previous: $exception,
-                    );
-                }
-
-                usleep($attempt * 25_000);
-            }
-        }
-
-        throw new CannotCompleteSignup('The signup list is busy. Please try again.');
-    }
-
-    private function isLockContention(Throwable $exception): bool
-    {
-        for ($current = $exception; $current !== null; $current = $current->getPrevious()) {
-            if (! $current instanceof PDOException) {
-                continue;
-            }
-
-            $sqliteCode = isset($current->errorInfo[1]) ? (int) $current->errorInfo[1] : null;
-
-            if ($sqliteCode !== null) {
-                return in_array($sqliteCode & 0xFF, [5, 6], true);
-            }
-
-            if (Str::contains(Str::lower($current->getMessage()), [
-                'database is locked',
-                'database table is locked',
-                'database file is locked',
-            ])) {
-                return true;
-            }
-        }
-
-        return false;
+        return ['signup' => $signup, 'duplicate' => false];
     }
 }

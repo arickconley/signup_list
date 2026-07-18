@@ -5,6 +5,9 @@ namespace App\Actions;
 use App\Mail\AccountAccessMail;
 use App\Models\Account;
 use App\Models\AccountAccessChallenge;
+use Carbon\CarbonInterface;
+use Closure;
+use Illuminate\Mail\Mailable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
@@ -13,7 +16,10 @@ use Illuminate\Support\Str;
 
 class IssueAccountAccessChallenge
 {
-    public function handle(string $email): AccountAccessChallenge
+    /**
+     * @param  (Closure(string, string, CarbonInterface): Mailable)|null  $makeMail
+     */
+    public function handle(string $email, ?Closure $makeMail = null): AccountAccessChallenge
     {
         $email = Account::normalizeEmail($email);
         $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
@@ -41,7 +47,11 @@ class IssueAccountAccessChallenge
             ['challenge' => $challenge->public_id, 'token' => $token],
         );
 
-        Mail::to($email)->queue(new AccountAccessMail($code, $magicLink, $expiresAt));
+        $mail = $makeMail === null
+            ? new AccountAccessMail($code, $magicLink, $expiresAt)
+            : $makeMail($code, $magicLink, $expiresAt);
+
+        Mail::to($email)->queue($mail);
 
         return $challenge;
     }

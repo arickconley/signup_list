@@ -10,13 +10,12 @@ use Illuminate\Support\Carbon;
 /**
  * @property int $id
  * @property int $signup_id
- * @property int $option_id
- * @property-read Option $option
+ * @property int $account_id
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['option_id'])]
-class OptionClaim extends Model
+#[Fillable(['account_id'])]
+class PendingAccountAssociation extends Model
 {
     /** @return BelongsTo<Signup, $this> */
     public function signup(): BelongsTo
@@ -24,9 +23,9 @@ class OptionClaim extends Model
         return $this->belongsTo(Signup::class);
     }
 
-    /** @return BelongsTo<Option, $this> */
-    public function option(): BelongsTo
+    /** @return BelongsTo<Account, $this> */
+    public function account(): BelongsTo
     {
-        return $this->belongsTo(Option::class);
+        return $this->belongsTo(Account::class);
     }
 }

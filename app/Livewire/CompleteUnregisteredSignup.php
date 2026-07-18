@@ -4,6 +4,7 @@ namespace App\Livewire;
 
 use App\Actions\CompleteUnregisteredSignup as CompleteSignup;
 use App\Exceptions\CannotCompleteSignup;
+use App\Models\Account;
 use App\Models\Sheet;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\RateLimiter;
@@ -19,6 +20,8 @@ class CompleteUnregisteredSignup extends Component
 
     public string $phone = '';
 
+    public string $email = '';
+
     /** @var array<int, string> */
     public array $selectedOptions = [];
 
@@ -27,6 +30,8 @@ class CompleteUnregisteredSignup extends Component
     public string $announcement = '';
 
     public bool $completed = false;
+
+    public bool $checkEmail = false;
 
     /** @var array<int, string> */
     public array $unavailableOptionNames = [];
@@ -48,18 +53,20 @@ class CompleteUnregisteredSignup extends Component
     {
         $this->name = trim($this->name);
         $this->phone = trim($this->phone);
+        $this->email = filled($this->email) ? Account::normalizeEmail($this->email) : '';
         $this->resetErrorBag();
         $this->unavailableOptionNames = [];
         $this->announcement = '';
 
         if (trim($this->website) !== '') {
-            $this->reset('name', 'phone', 'selectedOptions', 'website');
+            $this->reset('name', 'email', 'phone', 'selectedOptions', 'website');
 
             return;
         }
 
         $this->validate([
             'name' => ['required', 'string', 'max:255'],
+            'email' => ['nullable', 'string', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
             'selectedOptions' => ['required', 'array', 'min:1', 'max:100'],
             'selectedOptions.*' => ['required', 'uuid', 'distinct'],
@@ -81,11 +88,13 @@ class CompleteUnregisteredSignup extends Component
         RateLimiter::hit($rateLimitKey, 60);
 
         try {
-            $completeSignup->handle(
+            $result = $completeSignup->handle(
                 $this->sheetPublicId,
                 $this->name,
                 $this->phone === '' ? null : $this->phone,
                 $this->selectedOptions,
+                $this->email === '' ? null : $this->email,
+                request()->ip() ?? 'unknown',
             );
         } catch (CannotCompleteSignup $exception) {
             $this->unavailableOptionNames = $exception->unavailableOptionNames;
@@ -100,7 +109,15 @@ class CompleteUnregisteredSignup extends Component
         }
 
         $this->completed = true;
-        $this->announcement = __('Signup complete.');
+        $this->checkEmail = $result->checkEmail;
+
+        if ($result->accessChallengePublicId !== null) {
+            session()->put('account_access_challenge', $result->accessChallengePublicId);
+        }
+
+        $this->announcement = $this->checkEmail
+            ? __('If the address can receive email, confirmation and an access link are on the way.')
+            : __('Signup complete.');
     }
 
     public function render(): View
