@@ -8,10 +8,10 @@ use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
-new #[Title('Profile settings')] class extends Component {
-    use ProfileValidationRules;
-
+new #[Title('Profile settings')] class extends Component
+{
     public string $name = '';
+
     public string $email = '';
 
     /**
@@ -19,44 +19,44 @@ new #[Title('Profile settings')] class extends Component {
      */
     public function mount(): void
     {
-        $this->name = Auth::user()->name;
+        $this->name = Auth::user()->name ?? '';
         $this->email = Auth::user()->email;
     }
 
     /**
-     * Update the profile information for the currently authenticated user.
+     * Update the profile information for the currently authenticated Account.
      */
     public function updateProfileInformation(): void
     {
-        $user = Auth::user();
+        $account = Auth::user();
 
-        $validated = $this->validate($this->profileRules($user->id));
+        $validated = $this->validate(ProfileValidationRules::profile($account->id));
 
-        $user->fill($validated);
+        $account->fill($validated);
 
-        if ($user->isDirty('email')) {
-            $user->email_verified_at = null;
+        if ($account->isDirty('email')) {
+            $account->email_verified_at = null;
         }
 
-        $user->save();
+        $account->save();
 
         session()->flash('success', __('Profile updated.'));
     }
 
     /**
-     * Send an email verification notification to the current user.
+     * Send an email verification notification to the current Account.
      */
     public function resendVerificationNotification(): void
     {
-        $user = Auth::user();
+        $account = Auth::user();
 
-        if ($user->hasVerifiedEmail()) {
+        if ($account->hasVerifiedEmail()) {
             $this->redirectIntended(default: route('dashboard', absolute: false));
 
             return;
         }
 
-        $user->sendEmailVerificationNotification();
+        $account->sendEmailVerificationNotification();
 
         Session::flash('status', 'verification-link-sent');
     }

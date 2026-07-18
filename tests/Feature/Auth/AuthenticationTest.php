@@ -1,6 +1,6 @@
 <?php
 
-use App\Models\User;
+use App\Models\Account;
 use Laravel\Fortify\Features;
 
 test('login screen can be rendered', function () {
@@ -9,11 +9,11 @@ test('login screen can be rendered', function () {
     $response->assertOk();
 });
 
-test('users can authenticate using the login screen', function () {
-    $user = User::factory()->create();
+test('accounts can authenticate using the login screen', function () {
+    $account = Account::factory()->create();
 
     $response = $this->post(route('login.store'), [
-        'email' => $user->email,
+        'email' => $account->email,
         'password' => 'password',
     ]);
 
@@ -24,11 +24,11 @@ test('users can authenticate using the login screen', function () {
     $this->assertAuthenticated();
 });
 
-test('users can not authenticate with invalid password', function () {
-    $user = User::factory()->create();
+test('accounts can not authenticate with invalid password', function () {
+    $account = Account::factory()->create();
 
     $response = $this->post(route('login.store'), [
-        'email' => $user->email,
+        'email' => $account->email,
         'password' => 'wrong-password',
     ]);
 
@@ -37,7 +37,7 @@ test('users can not authenticate with invalid password', function () {
     $this->assertGuest();
 });
 
-test('users with two factor enabled are redirected to two factor challenge', function () {
+test('accounts with two factor enabled are redirected to two factor challenge', function () {
     $this->skipUnlessFortifyHas(Features::twoFactorAuthentication());
 
     Features::twoFactorAuthentication([
@@ -45,10 +45,10 @@ test('users with two factor enabled are redirected to two factor challenge', fun
         'confirmPassword' => true,
     ]);
 
-    $user = User::factory()->withTwoFactor()->create();
+    $account = Account::factory()->withTwoFactor()->create();
 
     $response = $this->post(route('login.store'), [
-        'email' => $user->email,
+        'email' => $account->email,
         'password' => 'password',
     ]);
 
@@ -56,10 +56,10 @@ test('users with two factor enabled are redirected to two factor challenge', fun
     $this->assertGuest();
 });
 
-test('users can logout', function () {
-    $user = User::factory()->create();
+test('accounts can logout', function () {
+    $account = Account::factory()->create();
 
-    $response = $this->actingAs($user)->post(route('logout'));
+    $response = $this->actingAs($account)->post(route('logout'));
 
     $response->assertRedirect(route('home'));
 

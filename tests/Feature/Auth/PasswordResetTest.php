@@ -1,6 +1,6 @@
 <?php
 
-use App\Models\User;
+use App\Models\Account;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Support\Facades\Notification;
 use Laravel\Fortify\Features;
@@ -18,21 +18,21 @@ test('reset password link screen can be rendered', function () {
 test('reset password link can be requested', function () {
     Notification::fake();
 
-    $user = User::factory()->create();
+    $account = Account::factory()->create();
 
-    $this->post(route('password.request'), ['email' => $user->email]);
+    $this->post(route('password.request'), ['email' => $account->email]);
 
-    Notification::assertSentTo($user, ResetPassword::class);
+    Notification::assertSentTo($account, ResetPassword::class);
 });
 
 test('reset password screen can be rendered', function () {
     Notification::fake();
 
-    $user = User::factory()->create();
+    $account = Account::factory()->create();
 
-    $this->post(route('password.request'), ['email' => $user->email]);
+    $this->post(route('password.request'), ['email' => $account->email]);
 
-    Notification::assertSentTo($user, ResetPassword::class, function ($notification) {
+    Notification::assertSentTo($account, ResetPassword::class, function ($notification) {
         $response = $this->get(route('password.reset', $notification->token));
 
         $response->assertOk();
@@ -44,14 +44,14 @@ test('reset password screen can be rendered', function () {
 test('password can be reset with valid token', function () {
     Notification::fake();
 
-    $user = User::factory()->create();
+    $account = Account::factory()->create();
 
-    $this->post(route('password.request'), ['email' => $user->email]);
+    $this->post(route('password.request'), ['email' => $account->email]);
 
-    Notification::assertSentTo($user, ResetPassword::class, function ($notification) use ($user) {
+    Notification::assertSentTo($account, ResetPassword::class, function ($notification) use ($account) {
         $response = $this->post(route('password.update'), [
             'token' => $notification->token,
-            'email' => $user->email,
+            'email' => $account->email,
             'password' => 'password',
             'password_confirmation' => 'password',
         ]);

@@ -1,6 +1,6 @@
 <?php
 
-use App\Models\User;
+use App\Models\Account;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\URL;
@@ -11,48 +11,48 @@ beforeEach(function () {
 });
 
 test('email verification screen can be rendered', function () {
-    $user = User::factory()->unverified()->create();
+    $account = Account::factory()->unverified()->create();
 
-    $response = $this->actingAs($user)->get(route('verification.notice'));
+    $response = $this->actingAs($account)->get(route('verification.notice'));
 
     $response->assertOk();
 });
 
 test('email can be verified', function () {
-    $user = User::factory()->unverified()->create();
+    $account = Account::factory()->unverified()->create();
 
     Event::fake();
 
     $verificationUrl = URL::temporarySignedRoute(
         'verification.verify',
         now()->addMinutes(60),
-        ['id' => $user->id, 'hash' => sha1($user->email)],
+        ['id' => $account->id, 'hash' => sha1($account->email)],
     );
 
-    $response = $this->actingAs($user)->get($verificationUrl);
+    $response = $this->actingAs($account)->get($verificationUrl);
 
     Event::assertDispatched(Verified::class);
 
-    expect($user->fresh()->hasVerifiedEmail())->toBeTrue();
+    expect($account->fresh()->hasVerifiedEmail())->toBeTrue();
     $response->assertRedirect(route('dashboard', absolute: false).'?verified=1');
 });
 
 test('email is not verified with invalid hash', function () {
-    $user = User::factory()->unverified()->create();
+    $account = Account::factory()->unverified()->create();
 
     $verificationUrl = URL::temporarySignedRoute(
         'verification.verify',
         now()->addMinutes(60),
-        ['id' => $user->id, 'hash' => sha1('wrong-email')],
+        ['id' => $account->id, 'hash' => sha1('wrong-email')],
     );
 
-    $this->actingAs($user)->get($verificationUrl);
+    $this->actingAs($account)->get($verificationUrl);
 
-    expect($user->fresh()->hasVerifiedEmail())->toBeFalse();
+    expect($account->fresh()->hasVerifiedEmail())->toBeFalse();
 });
 
-test('already verified user visiting verification link is redirected without firing event again', function () {
-    $user = User::factory()->create([
+test('already verified account visiting verification link is redirected without firing event again', function () {
+    $account = Account::factory()->create([
         'email_verified_at' => now(),
     ]);
 
@@ -61,12 +61,12 @@ test('already verified user visiting verification link is redirected without fir
     $verificationUrl = URL::temporarySignedRoute(
         'verification.verify',
         now()->addMinutes(60),
-        ['id' => $user->id, 'hash' => sha1($user->email)],
+        ['id' => $account->id, 'hash' => sha1($account->email)],
     );
 
-    $this->actingAs($user)->get($verificationUrl)
+    $this->actingAs($account)->get($verificationUrl)
         ->assertRedirect(route('dashboard', absolute: false).'?verified=1');
 
-    expect($user->fresh()->hasVerifiedEmail())->toBeTrue();
+    expect($account->fresh()->hasVerifiedEmail())->toBeTrue();
     Event::assertNotDispatched(Verified::class);
 });

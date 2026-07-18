@@ -2,7 +2,7 @@
     <summary class="flex min-h-11 cursor-pointer list-none items-center gap-3 rounded-lg px-2 py-1.5 text-start hover:bg-stone-200/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 dark:hover:bg-stone-800 [&::-webkit-details-marker]:hidden" data-test="sidebar-menu-button">
         <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-amber-200 text-sm font-bold text-amber-950 dark:bg-amber-300">{{ auth()->user()->initials() }}</span>
         <span class="min-w-0 flex-1">
-            <span class="block truncate text-sm font-semibold">{{ auth()->user()->name }}</span>
+            <span class="block truncate text-sm font-semibold">{{ auth()->user()->name ?: auth()->user()->email }}</span>
             <span class="block truncate text-xs text-stone-500 dark:text-stone-400">{{ auth()->user()->email }}</span>
         </span>
         <span class="text-stone-500 transition group-open:rotate-180" aria-hidden="true">⌄</span>

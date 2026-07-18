@@ -41,7 +41,7 @@
                 </nav>
 
                 <div class="mt-auto border-t border-stone-200 pt-4 dark:border-stone-800">
-                    <x-desktop-user-menu />
+                    <x-desktop-account-menu />
                 </div>
             </aside>
 

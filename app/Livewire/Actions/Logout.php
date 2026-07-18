@@ -10,7 +10,7 @@ use Livewire\Features\SupportRedirects\Redirector;
 class Logout
 {
     /**
-     * Log the current user out of the application.
+     * Log the current account out of the application.
      */
     public function __invoke(): Redirector|RedirectResponse
     {

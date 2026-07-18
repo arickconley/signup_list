@@ -12,9 +12,7 @@
                         <a href="{{ route('dashboard') }}" class="rounded-lg px-4 py-2.5 text-sm font-semibold hover:bg-stone-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 dark:hover:bg-stone-800">{{ __('Dashboard') }}</a>
                     @else
                         <a href="{{ route('login') }}" class="rounded-lg px-4 py-2.5 text-sm font-semibold hover:bg-stone-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 dark:hover:bg-stone-800">{{ __('Log in') }}</a>
-                        @if (Route::has('register'))
-                            <a href="{{ route('register') }}" class="rounded-lg bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2 dark:bg-teal-500 dark:text-stone-950 dark:hover:bg-teal-400">{{ __('Create account') }}</a>
-                        @endif
+                        <a href="{{ route('login') }}" class="rounded-lg bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2 dark:bg-teal-500 dark:text-stone-950 dark:hover:bg-teal-400">{{ __('Create account') }}</a>
                     @endauth
                 </nav>
             </header>
@@ -29,7 +27,7 @@
                             @auth
                                 <a href="{{ route('dashboard') }}" class="inline-flex min-h-12 items-center rounded-lg bg-teal-700 px-5 font-semibold text-white shadow-sm hover:bg-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2 dark:bg-teal-500 dark:text-stone-950 dark:hover:bg-teal-400">{{ __('Open dashboard') }}</a>
                             @else
-                                <a href="{{ route('register') }}" class="inline-flex min-h-12 items-center rounded-lg bg-teal-700 px-5 font-semibold text-white shadow-sm hover:bg-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2 dark:bg-teal-500 dark:text-stone-950 dark:hover:bg-teal-400">{{ __('Create your first sheet') }}</a>
+                                <a href="{{ route('login') }}" class="inline-flex min-h-12 items-center rounded-lg bg-teal-700 px-5 font-semibold text-white shadow-sm hover:bg-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2 dark:bg-teal-500 dark:text-stone-950 dark:hover:bg-teal-400">{{ __('Create your first sheet') }}</a>
                             @endauth
                             <a href="#how-it-works" class="inline-flex min-h-12 items-center rounded-lg border border-stone-300 bg-white px-5 font-semibold shadow-sm hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 dark:border-stone-700 dark:bg-stone-900 dark:hover:bg-stone-800">{{ __('How it works') }}</a>
                         </div>

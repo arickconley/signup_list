@@ -1,16 +1,46 @@
-<x-layouts::auth :title="__('Log in')">
+<x-layouts::auth :title="__('Access your account')">
     <div class="flex flex-col gap-6">
-        <x-auth-header :title="__('Log in to your account')" :description="__('Enter your email and password below to log in')" />
+        <x-auth-header
+            :title="__('Access your account')"
+            :description="__('Enter your email. We’ll send a one-time code and secure sign-in link.')"
+        />
 
-        <!-- Session Status -->
         <x-auth-session-status class="text-center" :status="session('status')" />
+
+        @error('access')
+            <p class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200" role="alert">
+                {{ $message }}
+            </p>
+        @enderror
+
+        @if (session()->has('account_access_challenge'))
+            <form method="POST" action="{{ route('account-access.code') }}" class="flex flex-col gap-4">
+                @csrf
+
+                <x-ui.otp
+                    name="code"
+                    :label="__('Sign-in code')"
+                    required
+                    autofocus
+                />
+
+                <x-ui.button variant="primary" type="submit" class="w-full">
+                    {{ __('Verify code') }}
+                </x-ui.button>
+            </form>
+
+            <div class="flex items-center gap-3 text-xs uppercase tracking-wide text-stone-500" aria-hidden="true">
+                <span class="h-px flex-1 bg-stone-200 dark:bg-stone-700"></span>
+                {{ __('or use another sign-in method') }}
+                <span class="h-px flex-1 bg-stone-200 dark:bg-stone-700"></span>
+            </div>
+        @endif
 
         <x-passkey-verify />
 
-        <form method="POST" action="{{ route('login.store') }}" class="flex flex-col gap-6">
+        <form method="POST" action="{{ route('account-access.request') }}" class="flex flex-col gap-6">
             @csrf
 
-            <!-- Email Address -->
             <x-ui.input
                 name="email"
                 :label="__('Email address')"
@@ -22,38 +52,13 @@
                 placeholder="email@example.com"
             />
 
-            <!-- Password -->
-            <div class="relative">
-                <x-ui.input
-                    name="password"
-                    :label="__('Password')"
-                    type="password"
-                    required
-                    autocomplete="current-password"
-                    :placeholder="__('Password')"
-                    viewable
-                />
-
-                @if (Route::has('password.request'))
-                    <x-ui.link class="absolute top-0 text-sm end-0" :href="route('password.request')" wire:navigate>
-                        {{ __('Forgot your password?') }}
-                    </x-ui.link>
-                @endif
-            </div>
-
-            <!-- Remember Me -->
-            <x-ui.checkbox name="remember" :label="__('Remember me')" :checked="old('remember')" />
-
-            <div class="flex items-center justify-end">
-                <x-ui.button variant="primary" type="submit" class="w-full" data-test="login-button">
-                    {{ __('Log in') }}
-                </x-ui.button>
-            </div>
+            <x-ui.button variant="primary" type="submit" class="w-full" data-test="request-access-button">
+                {{ __('Email me a sign-in code') }}
+            </x-ui.button>
         </form>
 
-        <div class="space-x-1 text-sm text-center rtl:space-x-reverse text-zinc-600 dark:text-zinc-400">
-            <span>{{ __('Don\'t have an account?') }}</span>
-            <x-ui.link :href="route('register')" wire:navigate>{{ __('Sign up') }}</x-ui.link>
-        </div>
+        <p class="text-center text-sm leading-6 text-stone-600 dark:text-stone-400">
+            {{ __('New here? This will create your account—no password required.') }}
+        </p>
     </div>
 </x-layouts::auth>
