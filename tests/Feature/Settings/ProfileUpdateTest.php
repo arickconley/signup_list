@@ -17,6 +17,36 @@ test('passwordless Accounts without profile details can visit profile settings',
         ->assertOk();
 });
 
+test('profile form detects an initial browser timezone', function () {
+    $account = Account::factory()->create(['timezone' => null]);
+
+    $this->actingAs($account)
+        ->get(route('profile.edit'))
+        ->assertOk()
+        ->assertSee('Intl.DateTimeFormat().resolvedOptions().timeZone', false)
+        ->assertSee('$wire.setDetectedTimezone', false);
+});
+
+test('newly verified Account completes onboarding through profile settings', function () {
+    $account = Account::factory()->passwordless()->create([
+        'name' => null,
+        'timezone' => null,
+    ]);
+
+    $this->actingAs($account);
+
+    Livewire::test('pages::settings.profile')
+        ->assertSee('Complete your profile')
+        ->set('name', 'New Account')
+        ->set('phone', '555-0110')
+        ->set('timezone', 'America/Denver')
+        ->call('updateProfileInformation')
+        ->assertHasNoErrors()
+        ->assertRedirect(route('dashboard', absolute: false));
+
+    expect($account->refresh()->hasCompleteProfile())->toBeTrue();
+});
+
 test('profile information can be updated', function () {
     $account = Account::factory()->create();
 
@@ -34,6 +64,103 @@ test('profile information can be updated', function () {
     expect($account->name)->toEqual('Test User');
     expect($account->email)->toEqual('test@example.com');
     expect($account->email_verified_at)->toBeNull();
+});
+
+test('profile defaults can be updated with normalized values', function () {
+    $account = Account::factory()->create();
+
+    $this->actingAs($account);
+
+    Livewire::test('pages::settings.profile')
+        ->set('name', 'Test Account')
+        ->set('email', '  TEST@Example.COM ')
+        ->set('phone', '555-0100')
+        ->set('timezone', 'America/Chicago')
+        ->call('updateProfileInformation')
+        ->assertHasNoErrors();
+
+    expect($account->refresh())
+        ->name->toBe('Test Account')
+        ->email->toBe('test@example.com')
+        ->phone->toBe('555-0100')
+        ->timezone->toBe('America/Chicago');
+});
+
+test('profile form rejects an invalid timezone with an associated error', function () {
+    $account = Account::factory()->create();
+
+    $this->actingAs($account);
+
+    Livewire::test('pages::settings.profile')
+        ->set('timezone', 'Mars/Olympus_Mons')
+        ->call('updateProfileInformation')
+        ->assertHasErrors(['timezone'])
+        ->assertSee('Please correct the highlighted fields.')
+        ->assertSeeHtml('aria-describedby="timezone-error"')
+        ->assertSeeHtml('id="timezone-error"');
+
+    expect($account->refresh()->timezone)->toBe('America/Los_Angeles');
+});
+
+test('detected browser timezone initializes a blank profile and can be overridden', function () {
+    $account = Account::factory()->create(['timezone' => null]);
+
+    $this->actingAs($account);
+
+    Livewire::test('pages::settings.profile')
+        ->assertSet('timezone', '')
+        ->call('setDetectedTimezone', 'America/New_York')
+        ->assertSet('timezone', 'America/New_York')
+        ->set('timezone', 'Europe/Paris')
+        ->call('updateProfileInformation')
+        ->assertHasNoErrors();
+
+    expect($account->refresh()->timezone)->toBe('Europe/Paris');
+});
+
+test('captured Signup defaults are isolated from later profile updates', function () {
+    $account = Account::factory()->create([
+        'name' => 'Earlier Name',
+        'email' => 'earlier@example.com',
+        'phone' => '555-0101',
+        'timezone' => 'America/Los_Angeles',
+    ]);
+    $historicalSnapshot = $account->signupDefaults();
+
+    $this->actingAs($account);
+
+    Livewire::test('pages::settings.profile')
+        ->set('name', 'Future Name')
+        ->set('phone', '555-0199')
+        ->set('timezone', 'America/New_York')
+        ->call('updateProfileInformation')
+        ->assertHasNoErrors();
+
+    $futureDefaults = $account->refresh()->signupDefaults();
+
+    expect($historicalSnapshot)
+        ->name->toBe('Earlier Name')
+        ->email->toBe('earlier@example.com')
+        ->phone->toBe('555-0101')
+        ->timezone->toBe('America/Los_Angeles')
+        ->and($futureDefaults)
+        ->name->toBe('Future Name')
+        ->email->toBe('earlier@example.com')
+        ->phone->toBe('555-0199')
+        ->timezone->toBe('America/New_York');
+});
+
+test('blank optional phone is stored as null', function () {
+    $account = Account::factory()->create(['phone' => '555-0101']);
+
+    $this->actingAs($account);
+
+    Livewire::test('pages::settings.profile')
+        ->set('phone', '   ')
+        ->call('updateProfileInformation')
+        ->assertHasNoErrors();
+
+    expect($account->refresh()->phone)->toBeNull();
 });
 
 test('email verification status is unchanged when email address is unchanged', function () {

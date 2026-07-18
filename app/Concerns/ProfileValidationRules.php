@@ -18,6 +18,8 @@ final class ProfileValidationRules
         return [
             'name' => self::name(),
             'email' => self::email($accountId),
+            'phone' => ['nullable', 'string', 'max:30'],
+            'timezone' => ['required', 'string', 'timezone:all'],
         ];
     }
 

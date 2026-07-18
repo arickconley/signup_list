@@ -94,6 +94,10 @@ class AccountAccessController extends Controller
         $request->session()->regenerate();
         $request->session()->forget('account_access_challenge');
 
-        return redirect()->intended(route('dashboard'));
+        $destination = $account->hasCompleteProfile()
+            ? route('dashboard')
+            : route('profile.edit');
+
+        return redirect()->intended($destination);
     }
 }

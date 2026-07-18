@@ -117,7 +117,7 @@ test('resending after the cooldown invalidates the prior credentials', function 
 
     Mail::assertQueuedTimes(AccountAccessMail::class, 2);
     $this->get($oldMagicLink)->assertSessionHasErrors('access');
-    $this->post('/access/code', ['code' => $newCode])->assertRedirect(route('dashboard'));
+    $this->post('/access/code', ['code' => $newCode])->assertRedirect(route('profile.edit'));
     $this->assertAuthenticated();
 });
 
@@ -126,7 +126,7 @@ test('a magic link creates a verified passwordless Account and signs it in', fun
 
     $this->post('/access', ['email' => 'alice@example.com']);
 
-    $this->get(magicLinkFromAccountAccessMail())->assertRedirect(route('dashboard'));
+    $this->get(magicLinkFromAccountAccessMail())->assertRedirect(route('profile.edit'));
 
     $this->assertAuthenticated();
     expect(auth()->user()->hasVerifiedEmail())->toBeTrue()
@@ -139,7 +139,7 @@ test('the emailed code creates a verified passwordless Account and signs it in',
     $this->post('/access', ['email' => 'alice@example.com']);
 
     $this->post('/access/code', ['code' => codeFromAccountAccessMail()])
-        ->assertRedirect(route('dashboard'));
+        ->assertRedirect(route('profile.edit'));
 
     $this->assertAuthenticated();
     expect(auth()->user()->hasVerifiedEmail())->toBeTrue();
@@ -181,7 +181,7 @@ test('using a code invalidates its companion magic link', function () {
     $magicLink = magicLinkFromAccountAccessMail();
     $code = codeFromAccountAccessMail();
 
-    $this->post('/access/code', ['code' => $code])->assertRedirect(route('dashboard'));
+    $this->post('/access/code', ['code' => $code])->assertRedirect(route('profile.edit'));
     auth()->logout();
 
     $this->get($magicLink)
@@ -262,7 +262,7 @@ test('a magic link can be used only once', function () {
     $this->post('/access', ['email' => 'alice@example.com']);
     $magicLink = magicLinkFromAccountAccessMail();
 
-    $this->get($magicLink)->assertRedirect(route('dashboard'));
+    $this->get($magicLink)->assertRedirect(route('profile.edit'));
     auth()->logout();
 
     $this->get($magicLink)

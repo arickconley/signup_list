@@ -1,6 +1,7 @@
 <?php
 
 use App\Concerns\ProfileValidationRules;
+use App\Models\Account;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Session;
@@ -14,6 +15,12 @@ new #[Title('Profile settings')] class extends Component
 
     public string $email = '';
 
+    public string $phone = '';
+
+    public string $timezone = '';
+
+    public bool $completingProfile = false;
+
     /**
      * Mount the component.
      */
@@ -21,6 +28,16 @@ new #[Title('Profile settings')] class extends Component
     {
         $this->name = Auth::user()->name ?? '';
         $this->email = Auth::user()->email;
+        $this->phone = Auth::user()->phone ?? '';
+        $this->timezone = Auth::user()->timezone ?? '';
+        $this->completingProfile = ! Auth::user()->hasCompleteProfile();
+    }
+
+    public function setDetectedTimezone(string $timezone): void
+    {
+        if ($this->timezone === '' && in_array($timezone, timezone_identifiers_list(), true)) {
+            $this->timezone = $timezone;
+        }
     }
 
     /**
@@ -30,7 +47,13 @@ new #[Title('Profile settings')] class extends Component
     {
         $account = Auth::user();
 
+        $this->name = trim($this->name);
+        $this->email = Account::normalizeEmail($this->email);
+        $this->phone = trim($this->phone);
+        $this->timezone = trim($this->timezone);
+
         $validated = $this->validate(ProfileValidationRules::profile($account->id));
+        $validated['phone'] = $validated['phone'] === '' ? null : $validated['phone'];
 
         $account->fill($validated);
 
@@ -41,6 +64,10 @@ new #[Title('Profile settings')] class extends Component
         $account->save();
 
         session()->flash('success', __('Profile updated.'));
+
+        if ($this->completingProfile && $account->hasCompleteProfile()) {
+            $this->redirectIntended(default: route('dashboard', absolute: false));
+        }
     }
 
     /**
@@ -80,8 +107,23 @@ new #[Title('Profile settings')] class extends Component
 
     <h2 class="sr-only">{{ __('Profile settings') }}</h2>
 
-    <x-pages::settings.layout :heading="__('Profile')" :subheading="__('Update your name and email address')">
+    <x-pages::settings.layout
+        :heading="$completingProfile ? __('Complete your profile') : __('Profile')"
+        :subheading="$completingProfile
+            ? __('Add your name and timezone before continuing.')
+            : __('Update the defaults used for future signups')"
+    >
         <form wire:submit="updateProfileInformation" class="my-6 w-full space-y-6">
+            @if ($errors->any())
+                <x-ui.callout variant="danger" :heading="__('Please correct the highlighted fields.')">
+                    <ul class="mt-2 list-inside list-disc space-y-1">
+                        @foreach ($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </x-ui.callout>
+            @endif
+
             <x-ui.input wire:model="name" :label="__('Name')" type="text" required autofocus autocomplete="name" />
 
             <div>
@@ -106,13 +148,43 @@ new #[Title('Profile settings')] class extends Component
                 @endif
             </div>
 
-            <div class="flex items-center gap-4">
-                <div class="flex items-center justify-end">
-                    <x-ui.button variant="primary" type="submit" class="w-full" data-test="update-profile-button">
-                        {{ __('Save') }}
-                    </x-ui.button>
-                </div>
+            <x-ui.input
+                wire:model="phone"
+                :label="__('Phone')"
+                type="tel"
+                inputmode="tel"
+                autocomplete="tel"
+                :description="__('Optional. Used as the default for future signups.')"
+            />
 
+            <div
+                x-init="
+                    if ($wire.timezone === '') {
+                        const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                        if (detectedTimezone) $wire.setDetectedTimezone(detectedTimezone);
+                    }
+                "
+            >
+                <x-ui.input
+                    wire:model="timezone"
+                    :label="__('Timezone')"
+                    type="text"
+                    list="timezone-options"
+                    required
+                    autocomplete="off"
+                    :description="__('Used for dates and deadlines you create. Start typing to choose a timezone.')"
+                />
+                <datalist id="timezone-options">
+                    @foreach (timezone_identifiers_list() as $timezoneOption)
+                        <option value="{{ $timezoneOption }}"></option>
+                    @endforeach
+                </datalist>
+            </div>
+
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-center">
+                <x-ui.button variant="primary" type="submit" class="w-full sm:w-auto" data-test="update-profile-button">
+                    {{ __('Save') }}
+                </x-ui.button>
             </div>
 
             <x-ui.flash />

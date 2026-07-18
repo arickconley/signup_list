@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Data\SignupDefaults;
 use Database\Factories\AccountFactory;
 use Illuminate\Auth\MustVerifyEmail;
 use Illuminate\Contracts\Auth\MustVerifyEmail as MustVerifyEmailContract;
@@ -22,6 +23,8 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property int $id
  * @property string|null $name
  * @property string $email
+ * @property string|null $phone
+ * @property string|null $timezone
  * @property Carbon|null $email_verified_at
  * @property string|null $password
  * @property string|null $two_factor_secret
@@ -31,7 +34,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['name', 'email', 'password'])]
+#[Fillable(['name', 'email', 'phone', 'timezone', 'password'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class Account extends Authenticatable implements MustVerifyEmailContract, PasskeyUser
 {
@@ -57,6 +60,23 @@ class Account extends Authenticatable implements MustVerifyEmailContract, Passke
     public static function normalizeEmail(string $email): string
     {
         return Str::lower(trim($email));
+    }
+
+    public function hasCompleteProfile(): bool
+    {
+        return filled($this->name)
+            && is_string($this->timezone)
+            && in_array($this->timezone, timezone_identifiers_list(), true);
+    }
+
+    public function signupDefaults(): SignupDefaults
+    {
+        return new SignupDefaults(
+            name: $this->name ?? '',
+            email: $this->email,
+            phone: $this->phone,
+            timezone: $this->timezone ?? '',
+        );
     }
 
     public function initials(): string
