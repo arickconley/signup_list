@@ -43,7 +43,7 @@ class CompleteOpenSignup extends Component
             ->where('public_id', $sheetPublicId)
             ->firstOrFail();
 
-        abort_unless($sheet->isAcceptingSignups(), 404);
+        abort_unless($sheet->isAcceptingOpenParticipationSignups(), 404);
 
         $this->sheetPublicId = $sheetPublicId;
     }
@@ -63,15 +63,21 @@ class CompleteOpenSignup extends Component
             return;
         }
 
+        $selectionMaximum = Sheet::query()
+            ->where('public_id', $this->sheetPublicId)
+            ->firstOrFail()
+            ->selection_maximum;
+
         $this->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['nullable', 'string', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
-            'selectedOptions' => ['required', 'array', 'min:1', 'max:100'],
+            'selectedOptions' => ['required', 'array', 'min:1', 'max:'.$selectionMaximum],
             'selectedOptions.*' => ['required', 'uuid', 'distinct'],
         ], [
             'selectedOptions.required' => __('Choose at least one available Option.'),
             'selectedOptions.min' => __('Choose at least one available Option.'),
+            'selectedOptions.max' => __('Choose between 1 and :max available Options.'),
         ]);
 
         $rateLimitKey = 'signup:'.$this->sheetPublicId.'|'.request()->ip();
@@ -125,7 +131,7 @@ class CompleteOpenSignup extends Component
             ->where('public_id', $this->sheetPublicId)
             ->firstOrFail();
 
-        $acceptingSignups = $sheet->isAcceptingSignups();
+        $acceptingSignups = $sheet->isAcceptingOpenParticipationSignups();
 
         $availableOptions = $acceptingSignups
             ? $sheet->options()

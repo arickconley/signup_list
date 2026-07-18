@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Account;
+use App\Models\OptionClaim;
 use App\Models\Sheet;
 use App\Models\Signup;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -15,7 +16,7 @@ test('Signup Sheet acceptance requires Published Open Participation before its d
         ...$attributes,
     ]);
 
-    expect($sheet->isAcceptingSignups())->toBe($expected);
+    expect($sheet->isAcceptingOpenParticipationSignups())->toBe($expected);
 })->with([
     'accepting' => [[], true],
     'Draft Sheet' => [['state' => Sheet::STATE_DRAFT], false],
@@ -128,6 +129,34 @@ test('Unregistered Participant completes a Signup without creating an Account', 
         ->assertSeeInOrder(['Welcome table', 'Claimed', '1', 'Remaining', '1']);
 });
 
+test('Open Participation accepts every Option up to a configured maximum above 100', function () {
+    $sheet = Sheet::factory()->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_OPEN,
+        'deadline_at' => now()->addHour(),
+        'selection_maximum' => 101,
+    ]);
+
+    $optionPublicIds = collect(range(1, 101))
+        ->map(fn (int $position): string => $sheet->options()->create([
+            'name' => 'Option '.$position,
+            'capacity' => 1,
+            'position' => $position,
+        ])->public_id)
+        ->all();
+
+    Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
+        ->set('name', 'Maximum Participant')
+        ->set('selectedOptions', $optionPublicIds)
+        ->call('complete')
+        ->assertHasNoErrors()
+        ->assertSee('Signup complete');
+
+    expect(Signup::query()->sole()->optionClaims)->toHaveCount(101)
+        ->and(OptionClaim::query()->count())->toBe(101)
+        ->and($sheet->options()->where('claimed_count', 1)->count())->toBe(101);
+});
+
 test('Unregistered Participant may omit a phone number', function () {
     $sheet = Sheet::factory()->create([
         'state' => Sheet::STATE_PUBLISHED,
@@ -177,7 +206,7 @@ test('Signup validates required identity and selection maximum on the server', f
         ->set('name', 'Morgan Reed')
         ->set('selectedOptions', [$firstOption->public_id, $secondOption->public_id])
         ->call('complete')
-        ->assertHasErrors(['signup'])
+        ->assertHasErrors(['selectedOptions'])
         ->assertSee('Choose between 1 and 1 available Options.');
 
     expect(Signup::query()->count())->toBe(0)

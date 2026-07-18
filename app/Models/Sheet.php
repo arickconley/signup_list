@@ -4,7 +4,6 @@ namespace App\Models;
 
 use Database\Factories\SheetFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -85,13 +84,7 @@ class Sheet extends Model
         return $this->hasMany(Signup::class);
     }
 
-    /** @param  Builder<Sheet>  $query */
-    public function scopeNotArchived(Builder $query): void
-    {
-        $query->where('state', '!=', self::STATE_ARCHIVED);
-    }
-
-    public function isAcceptingSignups(): bool
+    public function isAcceptingOpenParticipationSignups(): bool
     {
         return $this->state === self::STATE_PUBLISHED
             && $this->participation_policy === self::PARTICIPATION_OPEN

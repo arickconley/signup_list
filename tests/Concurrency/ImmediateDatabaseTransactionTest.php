@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 test('account access consumption reuses a shared active PDO transaction', function () {
+    $originalDatabase = config()->get('database.connections.sqlite.database');
+    $originalTransactionMode = config()->get('database.connections.sqlite.transaction_mode');
     $databasePath = tempnam(sys_get_temp_dir(), 'signup-nested-transaction-');
 
     expect($databasePath)->toBeString();
@@ -59,6 +61,9 @@ test('account access consumption reuses a shared active PDO transaction', functi
         @unlink($databasePath);
         @unlink($databasePath.'-shm');
         @unlink($databasePath.'-wal');
+        config()->set('database.connections.sqlite.database', $originalDatabase);
+        config()->set('database.connections.sqlite.transaction_mode', $originalTransactionMode);
+        DB::purge('sqlite');
     }
 });
 

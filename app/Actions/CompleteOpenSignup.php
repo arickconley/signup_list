@@ -147,7 +147,7 @@ class CompleteOpenSignup
 
         if (
             $sheet === null
-            || ! $sheet->isAcceptingSignups()
+            || ! $sheet->isAcceptingOpenParticipationSignups()
         ) {
             throw new CannotCompleteSignup('This Signup Sheet is no longer open for signups.');
         }
