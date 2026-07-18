@@ -1,5 +1,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+@if (filled($robots ?? null))
+    <meta name="robots" content="{{ $robots }}">
+@endif
 
 <title>
     {{ filled($title ?? null) ? $title.' - '.config('app.name', 'Laravel') : config('app.name', 'Laravel') }}
@@ -20,4 +23,6 @@
 </script>
 
 @vite(['resources/css/app.css', 'resources/js/app.js'])
-@livewireStyles
+@if ($includeLivewire ?? true)
+    @livewireStyles
+@endif

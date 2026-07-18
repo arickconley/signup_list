@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AccountAccessController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ShowPublishedSheetController;
 use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'welcome')->name('home');
@@ -18,5 +19,11 @@ Route::middleware(['auth', 'verified', 'profile.complete'])->group(function () {
     Route::livewire('sheets/create', 'pages::sheets.create')->name('sheets.create');
     Route::livewire('sheets/{sheet}/edit', 'pages::sheets.edit')->name('sheets.edit');
 });
+
+Route::get('sheets/{sheet:public_id}', ShowPublishedSheetController::class)
+    ->name('sheets.show')
+    ->missing(fn () => response()
+        ->view('sheets.unavailable', status: 404)
+        ->header('X-Robots-Tag', 'noindex, nofollow'));
 
 require __DIR__.'/settings.php';

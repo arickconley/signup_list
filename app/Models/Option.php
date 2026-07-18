@@ -13,11 +13,12 @@ use Illuminate\Support\Carbon;
  * @property string $name
  * @property string|null $description
  * @property int $capacity
+ * @property int $claimed_count
  * @property int $position
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['name', 'description', 'capacity', 'position'])]
+#[Fillable(['name', 'description', 'capacity', 'claimed_count', 'position'])]
 class Option extends Model
 {
     /** @return BelongsTo<Sheet, $this> */
@@ -31,6 +32,7 @@ class Option extends Model
     {
         return [
             'capacity' => 'integer',
+            'claimed_count' => 'integer',
             'position' => 'integer',
         ];
     }
