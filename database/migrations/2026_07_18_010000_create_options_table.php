@@ -15,7 +15,7 @@ return new class extends Migration
                 "sheet_id" integer NOT NULL,
                 "name" varchar NOT NULL,
                 "description" text NULL,
-                "capacity" integer NOT NULL CHECK ("capacity" > 0),
+                "capacity" integer NOT NULL CHECK (typeof("capacity") = 'integer' AND "capacity" > 0),
                 "position" integer NOT NULL CHECK ("position" > 0),
                 "created_at" datetime NULL,
                 "updated_at" datetime NULL,

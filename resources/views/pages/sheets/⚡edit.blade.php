@@ -65,38 +65,9 @@ new #[Title('Edit Draft Sheet')] class extends Component
     public function saveDetails(): void
     {
         $this->authorizeOwner();
-
-        $this->title = trim($this->title);
-        $this->description = trim($this->description);
-        $this->eventAt = trim($this->eventAt);
-        $this->location = trim($this->location);
-        $this->deadlineAt = trim($this->deadlineAt);
-        $this->selectionMaximum = trim($this->selectionMaximum);
-
-        $this->validate([
-            'title' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string', 'max:5000'],
-            'eventAt' => ['nullable', 'date_format:Y-m-d\TH:i'],
-            'location' => ['nullable', 'string', 'max:255'],
-            'deadlineAt' => ['required', 'date_format:Y-m-d\TH:i'],
-            'selectionMaximum' => [
-                'nullable',
-                'integer',
-                'min:1',
-                'max:'.$this->sheet->options()->count(),
-            ],
-        ]);
-
-        $this->sheet->update([
-            'title' => $this->title,
-            'description' => $this->description === '' ? null : $this->description,
-            'event_at' => $this->eventAt === ''
-                ? null
-                : Carbon::parse($this->eventAt, $this->sheet->timezone)->utc(),
-            'location' => $this->location === '' ? null : $this->location,
-            'deadline_at' => Carbon::parse($this->deadlineAt, $this->sheet->timezone)->utc(),
-            'selection_maximum' => $this->selectionMaximum === '' ? null : (int) $this->selectionMaximum,
-        ]);
+        $this->normalizeDetails();
+        $this->validate($this->detailRules(publishing: false));
+        $this->sheet->update($this->detailAttributes());
         $this->sheet->refresh();
 
         session()->flash('success', __('Draft details saved.'));
@@ -234,13 +205,7 @@ new #[Title('Edit Draft Sheet')] class extends Component
     public function publish(): void
     {
         $this->authorizeOwner();
-
-        $this->title = trim($this->title);
-        $this->description = trim($this->description);
-        $this->eventAt = trim($this->eventAt);
-        $this->location = trim($this->location);
-        $this->deadlineAt = trim($this->deadlineAt);
-        $this->selectionMaximum = trim($this->selectionMaximum);
+        $this->normalizeDetails();
 
         $this->withValidator(function (Validator $validator): void {
             $validator->after(function (Validator $validator): void {
@@ -253,30 +218,11 @@ new #[Title('Edit Draft Sheet')] class extends Component
                     $validator->errors()->add('options', __('Add at least one valid Option before publishing.'));
                 }
             });
-        })->validate([
-            'title' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string', 'max:5000'],
-            'eventAt' => ['nullable', 'date_format:Y-m-d\TH:i'],
-            'location' => ['nullable', 'string', 'max:255'],
-            'deadlineAt' => ['required', 'date_format:Y-m-d\TH:i'],
-            'selectionMaximum' => [
-                'required',
-                'integer',
-                'min:1',
-                'max:'.$this->sheet->options()->count(),
-            ],
-        ]);
+        })->validate($this->detailRules(publishing: true));
 
         DB::transaction(function (): void {
             $this->sheet->update([
-                'title' => $this->title,
-                'description' => $this->description === '' ? null : $this->description,
-                'event_at' => $this->eventAt === ''
-                    ? null
-                    : Carbon::parse($this->eventAt, $this->sheet->timezone)->utc(),
-                'location' => $this->location === '' ? null : $this->location,
-                'deadline_at' => Carbon::parse($this->deadlineAt, $this->sheet->timezone)->utc(),
-                'selection_maximum' => (int) $this->selectionMaximum,
+                ...$this->detailAttributes(),
                 'state' => Sheet::STATE_PUBLISHED,
             ]);
         });
@@ -296,9 +242,52 @@ new #[Title('Edit Draft Sheet')] class extends Component
 
         $duplicate = $duplicateSheet->handle($owner, $this->sheet);
 
-        session()->flash('success', __('Signup Sheet duplicated into a new Draft.'));
+        session()->flash('success', __('Signup Sheet duplicated into a new Draft Sheet.'));
 
         $this->redirectRoute('sheets.edit', $duplicate, navigate: true);
+    }
+
+    private function normalizeDetails(): void
+    {
+        $this->title = trim($this->title);
+        $this->description = trim($this->description);
+        $this->eventAt = trim($this->eventAt);
+        $this->location = trim($this->location);
+        $this->deadlineAt = trim($this->deadlineAt);
+        $this->selectionMaximum = trim($this->selectionMaximum);
+    }
+
+    /** @return array<string, array<int, string>> */
+    private function detailRules(bool $publishing): array
+    {
+        return [
+            'title' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:5000'],
+            'eventAt' => ['nullable', 'date_format:Y-m-d\TH:i'],
+            'location' => ['nullable', 'string', 'max:255'],
+            'deadlineAt' => ['required', 'date_format:Y-m-d\TH:i'],
+            'selectionMaximum' => [
+                $publishing ? 'required' : 'nullable',
+                'integer',
+                'min:1',
+                'max:'.$this->sheet->options()->count(),
+            ],
+        ];
+    }
+
+    /** @return array<string, Carbon|int|string|null> */
+    private function detailAttributes(): array
+    {
+        return [
+            'title' => $this->title,
+            'description' => $this->description === '' ? null : $this->description,
+            'event_at' => $this->eventAt === ''
+                ? null
+                : Carbon::parse($this->eventAt, $this->sheet->timezone)->utc(),
+            'location' => $this->location === '' ? null : $this->location,
+            'deadline_at' => Carbon::parse($this->deadlineAt, $this->sheet->timezone)->utc(),
+            'selection_maximum' => $this->selectionMaximum === '' ? null : (int) $this->selectionMaximum,
+        ];
     }
 
     private function moveOption(int $optionId, int $offset): void
@@ -421,7 +410,12 @@ new #[Title('Edit Draft Sheet')] class extends Component
             </div>
 
             <div>
-                <dt class="text-xs font-bold uppercase tracking-[0.16em] text-stone-500 dark:text-stone-400">{{ __('Participant details') }}</dt>
+                <dt class="text-xs font-bold uppercase tracking-[0.16em] text-stone-500 dark:text-stone-400">{{ __('Participant visibility') }}</dt>
+                <dd class="mt-1 font-semibold">{{ __('Owner only') }}</dd>
+            </div>
+
+            <div>
+                <dt class="text-xs font-bold uppercase tracking-[0.16em] text-stone-500 dark:text-stone-400">{{ __('Contact visibility') }}</dt>
                 <dd class="mt-1 font-semibold">{{ __('Owner only') }}</dd>
             </div>
 
@@ -486,14 +480,14 @@ new #[Title('Edit Draft Sheet')] class extends Component
 
         <section class="mt-8 rounded-2xl border border-stone-200 bg-white p-6 shadow-sm dark:border-stone-800 dark:bg-stone-900" aria-labelledby="publishing-title">
             @if ($sheet->state === Sheet::STATE_PUBLISHED)
-                <h2 id="publishing-title" class="font-display text-2xl font-semibold">{{ __('Published') }}</h2>
-                <p class="mt-2 text-sm text-stone-600 dark:text-stone-400">{{ __('Share this UUID link with participants.') }}</p>
+                <h2 id="publishing-title" class="font-display text-2xl font-semibold">{{ __('Shareable link') }}</h2>
+                <p class="mt-2 text-sm text-stone-600 dark:text-stone-400">{{ __('Share this link with participants.') }}</p>
                 <a href="{{ url('/sheets/'.$sheet->public_id) }}" class="mt-4 inline-flex min-h-11 items-center rounded-lg font-semibold text-teal-700 underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 dark:text-teal-400">
                     {{ url('/sheets/'.$sheet->public_id) }}
                 </a>
             @else
                 <h2 id="publishing-title" class="font-display text-2xl font-semibold">{{ __('Ready to publish?') }}</h2>
-                <p class="mt-2 text-sm text-stone-600 dark:text-stone-400">{{ __('Publishing makes the UUID link available for sharing.') }}</p>
+                <p class="mt-2 text-sm text-stone-600 dark:text-stone-400">{{ __('Publishing makes the shareable link available.') }}</p>
                 @error('options')
                     <p id="publishing-options-error" role="alert" class="mt-3 text-sm font-medium text-red-700 dark:text-red-400">{{ $message }}</p>
                 @enderror
@@ -503,7 +497,7 @@ new #[Title('Edit Draft Sheet')] class extends Component
 
         <section class="mt-8 rounded-2xl border border-stone-200 bg-white p-6 shadow-sm dark:border-stone-800 dark:bg-stone-900" aria-labelledby="sheet-actions-title">
             <h2 id="sheet-actions-title" class="font-display text-2xl font-semibold">{{ __('Sheet actions') }}</h2>
-            <p class="mt-2 text-sm text-stone-600 dark:text-stone-400">{{ __('Start a new private Draft using this Sheet’s content and settings.') }}</p>
+            <p class="mt-2 text-sm text-stone-600 dark:text-stone-400">{{ __('Start a new Draft Sheet using this Signup Sheet’s content and settings.') }}</p>
             <x-ui.button wire:click="duplicate" variant="outline" class="mt-4">{{ __('Duplicate Sheet') }}</x-ui.button>
         </section>
     </div>

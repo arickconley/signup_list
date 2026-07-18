@@ -16,11 +16,13 @@ test('eligible Owner duplicates an owned Signup Sheet into a new Draft edit page
 
     $component = Livewire::test('pages::sheets.edit', ['sheet' => $source])
         ->assertSee('Duplicate Sheet')
+        ->assertSee('Start a new Draft Sheet')
         ->call('duplicate');
 
     $duplicate = $owner->ownedSheets()->whereKeyNot($source->id)->sole();
 
     $component->assertRedirect(route('sheets.edit', $duplicate, absolute: false));
+    expect(session('success'))->toBe('Signup Sheet duplicated into a new Draft Sheet.');
 
     expect($duplicate)
         ->title->toBe('Published neighborhood cleanup')
@@ -53,6 +55,7 @@ test('duplicate copies reusable content and settings from any Sheet state', func
         'name' => 'Cleanup',
         'description' => 'Stay afterward.',
         'capacity' => 4,
+        'claimed_count' => 3,
         'position' => 20,
     ]);
     $source->options()->create([
@@ -93,6 +96,7 @@ test('duplicate copies reusable content and settings from any Sheet state', func
         ->and($options->pluck('name')->all())->toBe(['Setup', 'Cleanup', 'Welcome table'])
         ->and($options->pluck('description')->all())->toBe([null, 'Stay afterward.', 'Greet each participant.'])
         ->and($options->pluck('capacity')->all())->toBe([2, 4, 7])
+        ->and($options->pluck('claimed_count')->all())->toBe([0, 0, 0])
         ->and($options->pluck('position')->all())->toBe([10, 20, 30]);
 })->with([
     'Draft source' => Sheet::STATE_DRAFT,

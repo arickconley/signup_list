@@ -12,6 +12,9 @@ test('Owner adds an Option to a Draft Sheet', function () {
     $this->actingAs($owner);
 
     Livewire::test('pages::sheets.edit', ['sheet' => $sheet])
+        ->assertSee('Participant visibility')
+        ->assertSee('Contact visibility')
+        ->assertDontSee('Participant details')
         ->set('optionName', 'Morning setup')
         ->set('optionDescription', 'Arrive fifteen minutes early.')
         ->set('optionCapacity', '3')
@@ -44,7 +47,7 @@ test('Option requires a name and positive whole-number capacity', function (stri
     'decimal capacity' => ['Decimal capacity', '1.5', 'optionCapacity'],
 ]);
 
-test('database rejects non-positive Option capacity', function (int $capacity) {
+test('database rejects invalid Option capacity', function (int|float $capacity) {
     $sheet = Sheet::factory()->create();
 
     expect(fn () => DB::table('options')->insert([
@@ -56,6 +59,7 @@ test('database rejects non-positive Option capacity', function (int $capacity) {
 })->with([
     'zero' => 0,
     'negative' => -1,
+    'fractional' => 1.5,
 ]);
 
 test('Owner edits an Option on a Draft Sheet', function () {
@@ -207,6 +211,7 @@ test('Owner publishes a valid Draft Sheet to its UUID link', function () {
         ->call('publish')
         ->assertHasNoErrors()
         ->assertSee('Published')
+        ->assertSee('Shareable link')
         ->assertSeeHtml('href="'.$shareUrl.'"')
         ->assertDontSeeHtml('href="'.url('/sheets/'.$sheet->id).'"');
 
