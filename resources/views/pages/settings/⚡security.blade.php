@@ -274,6 +274,7 @@ new #[Title('Security settings')] class extends Component {
                                 <x-ui.button
                                     variant="danger"
                                     wire:click="disable"
+                                    wire:confirm="{{ __('Disable Two-Factor Authentication? Password sign-in will no longer require an authenticator code.') }}"
                                 >
                                     {{ __('Disable two-factor authentication') }}
                                 </x-ui.button>

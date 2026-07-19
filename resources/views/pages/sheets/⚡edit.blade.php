@@ -171,6 +171,8 @@ new #[Title('Edit Signup Sheet')] class extends Component
 
     public function cancelEditingOption(): void
     {
+        $optionId = $this->editingOptionId;
+
         $this->reset('editingOptionId', 'editOptionName', 'editOptionDescription', 'editOptionCapacity');
         $this->resetValidation([
             'editOptionName',
@@ -178,6 +180,10 @@ new #[Title('Edit Signup Sheet')] class extends Component
             'editOptionCapacity',
         ]);
         $this->announcement = __('Option editing cancelled.');
+
+        if ($optionId !== null) {
+            $this->dispatch('option-edit-closed', optionId: $optionId);
+        }
     }
 
     public function requestOptionDeletion(int $optionId): void
@@ -701,7 +707,7 @@ new #[Title('Edit Signup Sheet')] class extends Component
                 @foreach ($sheet->options()->orderBy('position')->get() as $option)
                     <li wire:key="option-{{ $option->id }}" class="rounded-xl border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
                         @if ($editingOptionId === $option->id)
-                            <form wire:submit="updateOption" class="grid gap-4">
+                            <form wire:submit="updateOption" class="grid gap-4" x-init="$nextTick(() => $el.querySelector('input')?.focus())">
                                 <x-ui.input wire:model="editOptionName" :label="__('Option name')" type="text" required />
                                 <x-ui.input wire:model="editOptionDescription" :label="__('Short description')" type="text" :description="__('Optional.')" />
                                 <x-ui.input wire:model="editOptionCapacity" :label="__('Capacity')" type="number" min="1" required />
@@ -750,7 +756,15 @@ new #[Title('Edit Signup Sheet')] class extends Component
                                 <div class="flex flex-wrap gap-2">
                                     <x-ui.button wire:click="moveOptionUp({{ $option->id }})" variant="ghost" size="sm" :disabled="$loop->first">{{ __('Move up') }}</x-ui.button>
                                     <x-ui.button wire:click="moveOptionDown({{ $option->id }})" variant="ghost" size="sm" :disabled="$loop->last">{{ __('Move down') }}</x-ui.button>
-                                    <x-ui.button wire:click="startEditingOption({{ $option->id }})" variant="outline" size="sm">{{ __('Edit') }}</x-ui.button>
+                                    <x-ui.button
+                                        id="edit-option-{{ $option->id }}"
+                                        wire:click="startEditingOption({{ $option->id }})"
+                                        x-on:option-edit-closed.window="if ($event.detail.optionId === {{ $option->id }}) $nextTick(() => $el.focus())"
+                                        variant="outline"
+                                        size="sm"
+                                    >
+                                        {{ __('Edit') }}
+                                    </x-ui.button>
                                     @if ($sheet->state === Sheet::STATE_DRAFT)
                                         <x-ui.button wire:click="removeOption({{ $option->id }})" wire:confirm="{{ __('Remove this Option?') }}" variant="danger" size="sm">{{ __('Remove') }}</x-ui.button>
                                     @elseif ($sheet->state === Sheet::STATE_PUBLISHED)

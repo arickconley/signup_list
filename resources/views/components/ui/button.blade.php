@@ -14,7 +14,7 @@
         'ghost' => 'border-transparent bg-transparent text-stone-700 hover:bg-stone-100 dark:text-stone-200 dark:hover:bg-stone-800',
     ];
     $sizes = [
-        'sm' => 'min-h-9 px-3 text-sm',
+        'sm' => 'min-h-11 px-3 text-sm',
         'md' => 'min-h-11 px-4 text-sm',
     ];
 @endphp

@@ -92,9 +92,9 @@
                                 </ul>
                             </a>
                             <div class="mt-5 flex flex-wrap items-center gap-x-5 gap-y-3 text-sm">
-                                <x-ui.link :href="route('sheets.show', $signup->sheet, absolute: false)" wire:navigate>{{ __('View Signup Sheet') }}</x-ui.link>
+                                <x-ui.link :href="route('sheets.show', $signup->sheet, absolute: false)" wire:navigate action>{{ __('View Signup Sheet') }}</x-ui.link>
                                 @if ($signup->canBeEditedBy(auth()->user()))
-                                    <x-ui.link :href="route('signups.edit', $signup, absolute: false)" wire:navigate>{{ __('Edit Signup') }}</x-ui.link>
+                                    <x-ui.link :href="route('signups.edit', $signup, absolute: false)" wire:navigate action>{{ __('Edit Signup') }}</x-ui.link>
                                 @endif
                             </div>
                         </article>

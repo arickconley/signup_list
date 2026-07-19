@@ -336,7 +336,7 @@ new #[Title('Edit Signup')] class extends Component
         </section>
 
         <div class="mt-6">
-            <x-ui.link :href="route('dashboard')" wire:navigate>{{ __('Back to Dashboard') }}</x-ui.link>
+            <x-ui.link :href="route('dashboard')" wire:navigate action>{{ __('Back to Dashboard') }}</x-ui.link>
         </div>
     </div>
 </x-layouts::app>

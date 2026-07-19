@@ -320,7 +320,11 @@ new class extends Component {
                                     <x-ui.icon name="spinner" class="size-5"/>
                                 </div>
                             @else
+                                <label for="two-factor-manual-key" class="sr-only">
+                                    {{ __('Manual setup key') }}
+                                </label>
                                 <input
+                                    id="two-factor-manual-key"
                                     type="text"
                                     readonly
                                     value="{{ $manualSetupKey }}"
@@ -328,8 +332,10 @@ new class extends Component {
                                 />
 
                                 <button
-                                    @click="copy()"
-                                    class="px-3 transition-colors border-l cursor-pointer border-stone-200 dark:border-stone-600"
+                                    type="button"
+                                    x-on:click="copy()"
+                                    aria-label="{{ __('Copy manual setup key') }}"
+                                    class="min-h-11 min-w-11 px-3 transition-colors border-l cursor-pointer border-stone-200 dark:border-stone-600"
                                 >
                                     <x-ui.icon name="copy" x-show="!copied" class="size-5" />
                                     <x-ui.icon name="check"
@@ -338,6 +344,15 @@ new class extends Component {
                                         class="text-green-500"
                                     />
                                 </button>
+                                <span
+                                    role="status"
+                                    aria-live="polite"
+                                    x-show="copied"
+                                    x-cloak
+                                    class="sr-only"
+                                >
+                                    {{ __('Manual setup key copied.') }}
+                                </span>
                             @endempty
                         </div>
                     </div>

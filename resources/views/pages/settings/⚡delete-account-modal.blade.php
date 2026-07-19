@@ -191,10 +191,10 @@ new class extends Component {
     x-init="if (@js($errors->isNotEmpty())) $nextTick(() => $refs.dialog.showModal())"
     x-on:open-delete-account.window="$wire.beginDeletion(); $refs.dialog.showModal(); $nextTick(() => $refs.password?.focus())"
     x-on:click.self="$refs.dialog.close()"
-    class="m-auto max-h-[calc(100vh-2rem)] w-[calc(100%-2rem)] max-w-lg overflow-visible rounded-2xl bg-transparent p-0 text-stone-950 backdrop:bg-stone-950/50 backdrop:backdrop-blur-sm dark:text-stone-50"
+    class="m-auto max-h-[calc(100vh-2rem)] w-[calc(100%-2rem)] max-w-lg overflow-hidden rounded-2xl bg-transparent p-0 text-stone-950 backdrop:bg-stone-950/50 backdrop:backdrop-blur-sm dark:text-stone-50"
     aria-labelledby="delete-account-title"
 >
-    <div class="w-full rounded-2xl border border-stone-200 bg-white p-6 shadow-2xl dark:border-stone-700 dark:bg-stone-900">
+    <div class="max-h-[calc(100vh-2rem)] w-full overflow-y-auto rounded-2xl border border-stone-200 bg-white p-6 shadow-2xl dark:border-stone-700 dark:bg-stone-900">
         <form wire:submit="deleteAccount" class="space-y-6">
             <div>
                 <h2 id="delete-account-title" class="font-display text-2xl font-semibold">{{ __('Are you sure you want to delete your account?') }}</h2>

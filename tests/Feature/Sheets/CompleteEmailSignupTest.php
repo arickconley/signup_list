@@ -191,11 +191,11 @@ test('duplicate normalized email is neutral and changes no Signup capacity', fun
         ->and(OptionClaim::query()->count())->toBe(1)
         ->and(PendingAccountAssociation::query()->count())->toBe(1)
         ->and($option->refresh()->claimed_count)->toBe(1);
-    Mail::assertQueuedTimes(SignupConfirmationMail::class, 2);
+    Mail::assertQueuedTimes(SignupConfirmationMail::class, 1);
 
-    /** @var SignupConfirmationMail $duplicateMail */
-    $duplicateMail = Mail::queued(SignupConfirmationMail::class)->last();
-    $rendered = $duplicateMail->render();
+    /** @var SignupConfirmationMail $accessMail */
+    $accessMail = Mail::queued(SignupConfirmationMail::class)->last();
+    $rendered = $accessMail->render();
 
     preg_match_all('/\b(\d{6})\b/', strip_tags($rendered), $codeMatches);
     preg_match('/href="([^"]*\/access\/[^"]*)"/', $rendered, $linkMatches);
@@ -211,6 +211,49 @@ test('duplicate normalized email is neutral and changes no Signup capacity', fun
         ->and(OptionClaim::query()->count())->toBe(1)
         ->and(PendingAccountAssociation::query()->count())->toBe(1)
         ->and($option->refresh()->claimed_count)->toBe(1);
+    Mail::assertQueuedTimes(SignupConfirmationMail::class, 1);
+});
+
+test('first email-backed Signups share global email and IP access-mail throttles', function () {
+    Mail::fake();
+    config()->set('account-access.send_limit_per_email', 1);
+    config()->set('account-access.send_limit_per_ip', 1);
+    config()->set('account-access.resend_cooldown_seconds', 1);
+
+    $complete = function (string $email, string $ipAddress): CompleteSignupInput {
+        $sheet = Sheet::factory()->create([
+            'state' => Sheet::STATE_PUBLISHED,
+            'participation_policy' => Sheet::PARTICIPATION_OPEN,
+            'selection_maximum' => 1,
+        ]);
+        $option = $sheet->options()->create([
+            'name' => 'Community task',
+            'capacity' => 1,
+            'position' => 1,
+        ]);
+
+        return new CompleteSignupInput(
+            sheetPublicId: $sheet->public_id,
+            name: 'Pending Participant',
+            phone: null,
+            optionPublicIds: [$option->public_id],
+            email: $email,
+            ipAddress: $ipAddress,
+        );
+    };
+
+    $results = [
+        app(CompleteOpenSignup::class)->handle($complete('same@example.test', '192.0.2.1')),
+        app(CompleteOpenSignup::class)->handle($complete('same@example.test', '192.0.2.2')),
+        app(CompleteOpenSignup::class)->handle($complete('first@example.test', '192.0.2.3')),
+        app(CompleteOpenSignup::class)->handle($complete('second@example.test', '192.0.2.3')),
+    ];
+
+    expect(array_map(fn ($result): bool => $result->checkEmail, $results))->each->toBeTrue()
+        ->and(Signup::query()->count())->toBe(4)
+        ->and(PendingAccountAssociation::query()->count())->toBe(4)
+        ->and(OptionClaim::query()->count())->toBe(4)
+        ->and(AccountAccessChallenge::query()->count())->toBe(2);
     Mail::assertQueuedTimes(SignupConfirmationMail::class, 2);
 });
 
@@ -243,7 +286,7 @@ test('a throttled duplicate Signup access message produces a structured warning'
             'operation' => 'duplicate_access_message',
             'sheet_public_id' => $sheet->public_id,
         ])
-        ->once();
+        ->twice();
 });
 
 test('a throttled access message after a capacity failure produces a structured warning', function () {
@@ -396,7 +439,7 @@ test('known and fresh emails receive the same capacity response while only the d
     Mail::assertQueuedCount(1);
 });
 
-test('existing Account Defaults initialize a private isolated Signup snapshot', function () {
+test('known unverified email uses submitted snapshots without exposing Account Defaults', function () {
     Mail::fake();
 
     $account = Account::factory()->create([
@@ -440,19 +483,28 @@ test('existing Account Defaults initialize a private isolated Signup snapshot', 
         ->timezone->toBe('America/New_York')
         ->and(Account::query()->where('email', 'existing@example.com')->count())->toBe(1)
         ->and($signup)
-        ->name_snapshot->toBe('Existing Profile Name')
+        ->name_snapshot->toBe('Submitted Snapshot Name')
         ->email_snapshot->toBe('existing@example.com')
-        ->phone_snapshot->toBe('555-0111')
+        ->phone_snapshot->toBe('555-0222')
         ->account_id->toBeNull()
-        ->name_consent->toBeFalse()
-        ->email_consent->toBeFalse()
-        ->phone_consent->toBeFalse()
+        ->name_consent->toBeTrue()
+        ->email_consent->toBeTrue()
+        ->phone_consent->toBeTrue()
         ->and($signup->pendingAccountAssociation?->account_id)->toBe($account->id);
 
     $this->get(route('sheets.show', $sheet))
         ->assertOk()
+        ->assertSee('Submitted Snapshot Name')
+        ->assertSee('555-0222')
         ->assertDontSee('Existing Profile Name')
-        ->assertDontSee('existing@example.com')
+        ->assertDontSee('555-0111');
+
+    $this->actingAs($sheet->owner)
+        ->get(route('sheets.signups', $sheet))
+        ->assertOk()
+        ->assertSee('Submitted Snapshot Name')
+        ->assertSee('555-0222')
+        ->assertDontSee('Existing Profile Name')
         ->assertDontSee('555-0111');
 
     $account->update([
@@ -461,9 +513,9 @@ test('existing Account Defaults initialize a private isolated Signup snapshot', 
     ]);
 
     expect($signup->refresh())
-        ->name_snapshot->toBe('Existing Profile Name')
+        ->name_snapshot->toBe('Submitted Snapshot Name')
         ->email_snapshot->toBe('existing@example.com')
-        ->phone_snapshot->toBe('555-0111');
+        ->phone_snapshot->toBe('555-0222');
 });
 
 test('submitted values fill blank existing Account Defaults', function () {

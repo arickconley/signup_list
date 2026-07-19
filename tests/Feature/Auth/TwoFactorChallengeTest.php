@@ -25,4 +25,12 @@ test('two factor challenge can be rendered', function () {
         'email' => $account->email,
         'password' => 'password',
     ])->assertRedirect(route('two-factor.login'));
+
+    $response = $this->get(route('two-factor.login'))
+        ->assertOk()
+        ->assertSeeHtml('<label for="recovery_code"')
+        ->assertSeeHtml('type="button"')
+        ->assertSeeHtml('x-on:click="toggleInput()"');
+
+    expect(substr_count($response->getContent(), 'x-on:click="toggleInput()"'))->toBe(2);
 });

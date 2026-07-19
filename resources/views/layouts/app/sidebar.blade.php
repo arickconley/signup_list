@@ -6,25 +6,53 @@
         @include('partials.head', ['robots' => $robots])
     </head>
     <body>
-        <div class="min-h-screen lg:flex" x-data="{ navOpen: false }" x-on:keydown.escape.window="navOpen = false">
+        <div
+            class="min-h-screen lg:flex"
+            x-data="{
+                navOpen: false,
+                desktop: window.matchMedia('(min-width: 1024px)').matches,
+                init() {
+                    const media = window.matchMedia('(min-width: 1024px)');
+
+                    media.addEventListener('change', (event) => {
+                        this.desktop = event.matches;
+
+                        if (this.desktop) this.navOpen = false;
+                    });
+                },
+                openNav() {
+                    this.navOpen = true;
+                    this.$nextTick(() => this.$refs.navCloseTrigger?.focus());
+                },
+                closeNav() {
+                    if (! this.navOpen) return;
+
+                    this.navOpen = false;
+                    this.$nextTick(() => this.$refs.navOpenTrigger?.focus());
+                },
+            }"
+            x-on:keydown.escape.window="closeNav()"
+        >
             <header class="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-stone-200 bg-stone-50/95 px-4 backdrop-blur lg:hidden dark:border-stone-800 dark:bg-stone-950/95">
                 <x-app-logo href="{{ route('dashboard') }}" wire:navigate />
-                <button type="button" class="flex size-11 items-center justify-center rounded-lg hover:bg-stone-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 dark:hover:bg-stone-800" x-on:click="navOpen = true" aria-controls="app-navigation" x-bind:aria-expanded="navOpen">
+                <button type="button" class="flex size-11 items-center justify-center rounded-lg hover:bg-stone-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 dark:hover:bg-stone-800" x-ref="navOpenTrigger" x-on:click="openNav()" aria-controls="app-navigation" x-bind:aria-expanded="navOpen">
                     <span class="sr-only">{{ __('Open navigation') }}</span>
                     <x-ui.icon name="menu" class="size-6" />
                 </button>
             </header>
 
-            <div x-show="navOpen" x-cloak class="fixed inset-0 z-40 bg-stone-950/40 backdrop-blur-sm lg:hidden" x-on:click="navOpen = false" aria-hidden="true"></div>
+            <div x-show="navOpen" x-cloak class="fixed inset-0 z-40 bg-stone-950/40 backdrop-blur-sm lg:hidden" x-on:click="closeNav()" aria-hidden="true"></div>
 
             <aside
                 id="app-navigation"
                 class="fixed inset-y-0 start-0 z-50 flex w-72 flex-col border-e border-stone-200 bg-stone-50 p-4 transition-transform duration-200 lg:sticky lg:top-0 lg:z-20 lg:h-screen lg:translate-x-0 dark:border-stone-800 dark:bg-stone-900"
                 x-bind:class="navOpen ? 'translate-x-0' : '-translate-x-full'"
+                x-bind:inert="!desktop && !navOpen"
+                x-bind:aria-hidden="(!desktop && !navOpen).toString()"
             >
                 <div class="flex items-center justify-between">
                     <x-app-logo href="{{ route('dashboard') }}" wire:navigate />
-                    <button type="button" class="flex size-11 items-center justify-center rounded-lg hover:bg-stone-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 lg:hidden dark:hover:bg-stone-800" x-on:click="navOpen = false">
+                    <button type="button" class="flex size-11 items-center justify-center rounded-lg hover:bg-stone-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 lg:hidden dark:hover:bg-stone-800" x-ref="navCloseTrigger" x-on:click="closeNav()">
                         <span class="sr-only">{{ __('Close navigation') }}</span>
                         <x-ui.icon name="close" class="size-6" />
                     </button>

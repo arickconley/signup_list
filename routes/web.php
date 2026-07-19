@@ -17,36 +17,34 @@ Route::post('access/code', [AccountAccessController::class, 'consumeCode'])
 Route::get('access/{challenge}/link/{token}', [AccountAccessController::class, 'consumeMagicLink'])
     ->name('account-access.magic');
 
-Route::middleware(['auth', 'verified', 'profile.complete'])->group(function () {
-    Route::get('dashboard', DashboardController::class)
-        ->middleware(PreventSearchIndexing::class)
-        ->name('dashboard');
-    Route::get('sheets/{sheet}/signups/print', OwnerPrintViewController::class)
-        ->middleware(PreventSearchIndexing::class)
-        ->name('sheets.signups.print');
-    Route::livewire('signups/{signup}/edit', 'pages::signups.edit')
-        ->middleware(PreventSearchIndexing::class)
-        ->name('signups.edit');
-    Route::livewire('sheets/create', 'pages::sheets.create')
-        ->middleware(PreventSearchIndexing::class)
-        ->name('sheets.create');
-    Route::livewire('sheets/{sheet}/edit', 'pages::sheets.edit')
-        ->middleware(PreventSearchIndexing::class)
-        ->name('sheets.edit');
-    Route::livewire('sheets/{sheet}/signups', 'pages::sheets.signups')
-        ->middleware(PreventSearchIndexing::class)
-        ->name('sheets.signups');
-    Route::get('sheets/{sheet:public_id}/participate', ShowVerifiedParticipationController::class)
-        ->name('sheets.participate')
+Route::get('dashboard', DashboardController::class)
+    ->middleware(['auth', 'verified', 'profile.complete', PreventSearchIndexing::class])
+    ->name('dashboard');
+
+Route::middleware(PreventSearchIndexing::class)->group(function () {
+    Route::middleware(['auth', 'verified', 'profile.complete'])->group(function () {
+        Route::get('sheets/{sheet}/signups/print', OwnerPrintViewController::class)
+            ->name('sheets.signups.print');
+        Route::livewire('signups/{signup}/edit', 'pages::signups.edit')
+            ->name('signups.edit');
+        Route::livewire('sheets/create', 'pages::sheets.create')
+            ->name('sheets.create');
+        Route::livewire('sheets/{sheet}/edit', 'pages::sheets.edit')
+            ->name('sheets.edit');
+        Route::livewire('sheets/{sheet}/signups', 'pages::sheets.signups')
+            ->name('sheets.signups');
+        Route::get('sheets/{sheet:public_id}/participate', ShowVerifiedParticipationController::class)
+            ->name('sheets.participate')
+            ->missing(fn () => response()
+                ->view('sheets.unavailable', status: 404)
+                ->header('X-Robots-Tag', 'noindex, nofollow'));
+    });
+
+    Route::get('sheets/{sheet:public_id}', ShowPublishedSheetController::class)
+        ->name('sheets.show')
         ->missing(fn () => response()
             ->view('sheets.unavailable', status: 404)
             ->header('X-Robots-Tag', 'noindex, nofollow'));
 });
-
-Route::get('sheets/{sheet:public_id}', ShowPublishedSheetController::class)
-    ->name('sheets.show')
-    ->missing(fn () => response()
-        ->view('sheets.unavailable', status: 404)
-        ->header('X-Robots-Tag', 'noindex, nofollow'));
 
 require __DIR__.'/settings.php';

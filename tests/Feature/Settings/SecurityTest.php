@@ -35,6 +35,13 @@ test('security settings page can be rendered', function () {
     $response->assertSee('No passkeys yet');
     $response->assertSee('Two-factor authentication');
     $response->assertSee('Enable two-factor authentication');
+
+    $document = new DOMDocument;
+    $document->loadHTML($response->getContent());
+    $xpath = new DOMXPath($document);
+
+    expect($xpath->query('//nav[@aria-label="Settings"]//a[@aria-current="page" and normalize-space()="Security"]')->length)->toBe(1)
+        ->and($xpath->query('//nav[@aria-label="Settings"]//a[@aria-current="page"]')->length)->toBe(1);
 });
 
 test('security settings page requires password confirmation when enabled', function () {

@@ -57,7 +57,7 @@
                     <span x-show="!loading">{{ $label }}</span>
                     <span x-show="loading" x-cloak>{{ $loadingLabel }}</span>
                 </x-ui.button>
-                <p x-show="error" x-text="error" x-cloak
+                <p x-show="error" x-text="error" x-cloak role="alert"
                    class="text-sm text-center text-red-600 dark:text-red-400"></p>
             </div>
 

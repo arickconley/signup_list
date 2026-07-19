@@ -18,7 +18,10 @@ beforeEach(function () {
 test('reset password link screen can be rendered', function () {
     $response = $this->get(route('password.request'));
 
-    $response->assertOk();
+    $response
+        ->assertOk()
+        ->assertSeeHtml('text-stone-600 dark:text-stone-400')
+        ->assertDontSeeHtml('text-zinc-400');
 });
 
 test('reset password link can be requested', function () {
@@ -53,6 +56,31 @@ test('password reset requests do not reveal whether an Account exists', function
     }
 
     Notification::assertSentToTimes($account, AccountPasswordReset::class, 1);
+
+    $this->get(route('password.request'))
+        ->assertOk()
+        ->assertSeeHtml('text-green-700 dark:text-green-400');
+});
+
+test('password reset requests are source-IP limited without revealing whether an Account exists', function () {
+    Notification::fake();
+    $account = Account::factory()->create(['email' => 'limited@example.com']);
+
+    foreach (range(1, 5) as $attempt) {
+        $this->from(route('password.request'))->post(route('password.email'), [
+            'email' => "missing-{$attempt}@example.com",
+        ])->assertRedirect(route('password.request'));
+    }
+
+    $knownResponse = $this->from(route('password.request'))
+        ->post(route('password.email'), ['email' => $account->email]);
+    $unknownResponse = $this->from(route('password.request'))
+        ->post(route('password.email'), ['email' => 'still-missing@example.com']);
+
+    $knownResponse->assertTooManyRequests();
+    $unknownResponse->assertTooManyRequests();
+    expect($knownResponse->getContent())->toBe($unknownResponse->getContent());
+    Notification::assertNothingSent();
 });
 
 test('reset password screen can be rendered', function () {

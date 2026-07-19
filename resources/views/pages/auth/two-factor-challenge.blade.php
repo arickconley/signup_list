@@ -64,6 +64,7 @@
                             <x-ui.input
                                 type="text"
                                 name="recovery_code"
+                                :label="__('Recovery code')"
                                 x-ref="recovery_code"
                                 x-bind:required="showRecoveryInput"
                                 autocomplete="one-time-code"
@@ -89,10 +90,22 @@
 
                 <div class="mt-5 space-x-0.5 text-sm leading-5 text-center">
                     <span class="opacity-50">{{ __('or you can') }}</span>
-                    <div class="inline font-medium underline cursor-pointer opacity-80">
-                        <span x-show="!showRecoveryInput" @click="toggleInput()">{{ __('login using a recovery code') }}</span>
-                        <span x-show="showRecoveryInput" @click="toggleInput()">{{ __('login using an authentication code') }}</span>
-                    </div>
+                    <button
+                        type="button"
+                        x-show="!showRecoveryInput"
+                        x-on:click="toggleInput()"
+                        class="min-h-11 rounded px-1 font-medium underline underline-offset-4 opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
+                    >
+                        {{ __('login using a recovery code') }}
+                    </button>
+                    <button
+                        type="button"
+                        x-show="showRecoveryInput"
+                        x-on:click="toggleInput()"
+                        class="min-h-11 rounded px-1 font-medium underline underline-offset-4 opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
+                    >
+                        {{ __('login using an authentication code') }}
+                    </button>
                 </div>
             </form>
         </div>

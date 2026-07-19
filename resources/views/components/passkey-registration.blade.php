@@ -62,6 +62,7 @@
             this.showForm = false;
             this.name = '';
             this.error = null;
+            this.$nextTick(() => this.$refs.addPasskeyTrigger?.focus());
         },
     }"
 >
@@ -74,6 +75,7 @@
             <x-ui.button
                 variant="primary"
                 icon="plus"
+                x-ref="addPasskeyTrigger"
                 x-on:click="showForm = true"
             >
                 {{ __('Add passkey') }}
@@ -93,7 +95,7 @@
             />
             <p class="mt-1 text-sm text-stone-600 dark:text-stone-400">{{ __('Give this passkey a name to help you identify it later.') }}</p>
 
-            <p x-show="error" x-text="error" x-cloak class="text-sm text-red-600 dark:text-red-400"></p>
+            <p x-show="error" x-text="error" x-cloak role="alert" class="text-sm text-red-600 dark:text-red-400"></p>
 
             <div class="flex gap-2">
                 <x-ui.button

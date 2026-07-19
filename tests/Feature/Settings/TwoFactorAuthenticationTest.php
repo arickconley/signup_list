@@ -130,6 +130,23 @@ test('an Account confirms two-factor authentication setup and sees encrypted rec
     ])->assertSet('recoveryCodes', []);
 });
 
+test('manual Two-Factor Authentication setup controls are labeled and announce copy state', function () {
+    $account = Account::factory()->create();
+
+    $this->actingAs($account)
+        ->withSession(['auth.password_confirmed_at' => time()]);
+
+    Livewire::test('pages::settings.two-factor-setup-modal', [
+        'requiresConfirmation' => true,
+    ])
+        ->call('startTwoFactorSetup')
+        ->assertSeeHtml('<label for="two-factor-manual-key"')
+        ->assertSeeHtml('aria-label="Copy manual setup key"')
+        ->assertSeeHtml('role="status"')
+        ->assertSeeHtml('aria-live="polite"')
+        ->assertSeeText('Manual setup key copied.');
+});
+
 test('an enabled Account cannot reconfirm to redisclose recovery codes', function () {
     Notification::fake();
     $account = Account::factory()->withTwoFactor()->create();
@@ -247,6 +264,7 @@ test('an Account disables two-factor authentication after fresh authentication',
         ->withSession(['auth.password_confirmed_at' => time()]);
 
     Livewire::test('pages::settings.security')
+        ->assertSeeHtml('wire:confirm="Disable Two-Factor Authentication? Password sign-in will no longer require an authenticator code."')
         ->call('disable')
         ->assertHasNoErrors()
         ->assertSet('twoFactorEnabled', false);

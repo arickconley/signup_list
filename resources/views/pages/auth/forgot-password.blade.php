@@ -23,7 +23,7 @@
             </x-ui.button>
         </form>
 
-        <div class="space-x-1 rtl:space-x-reverse text-center text-sm text-zinc-400">
+        <div class="space-x-1 rtl:space-x-reverse text-center text-sm text-stone-600 dark:text-stone-400">
             <span>{{ __('Or, return to') }}</span>
             <x-ui.link :href="route('login')" wire:navigate>{{ __('log in') }}</x-ui.link>
         </div>

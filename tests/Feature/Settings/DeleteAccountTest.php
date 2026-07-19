@@ -37,6 +37,8 @@ test('deletion confirmation reports accurate Signup Sheet lifecycle counts', fun
 
     Livewire::test('pages::settings.delete-account-modal')
         ->call('beginDeletion')
+        ->assertSeeHtml('max-h-[calc(100vh-2rem)] w-full overflow-y-auto')
+        ->assertDontSeeHtml('overflow-visible')
         ->assertSet('sheetCounts', [
             'draft' => 2,
             'open' => 1,

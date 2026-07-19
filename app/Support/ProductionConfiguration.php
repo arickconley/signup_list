@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use Cron\CronExpression;
+use Illuminate\Encryption\Encrypter;
 
 final class ProductionConfiguration
 {
@@ -19,8 +20,8 @@ final class ProductionConfiguration
             $errors[] = 'APP_DEBUG must be false.';
         }
 
-        if (blank(config('app.key'))) {
-            $errors[] = 'APP_KEY must contain a generated application key.';
+        if (! $this->hasStrongApplicationKey(config('app.key'), config('app.cipher'))) {
+            $errors[] = 'APP_KEY must contain a strong generated application key.';
         }
 
         if (parse_url((string) config('app.url'), PHP_URL_SCHEME) !== 'https') {
@@ -52,7 +53,7 @@ final class ProductionConfiguration
 
         if (! $this->isAbsolutePath($persistentDiskPath)) {
             $errors[] = 'PERSISTENT_DISK_PATH must be an absolute mounted-disk path.';
-        } elseif (! str_starts_with($databasePath, rtrim($persistentDiskPath, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR)) {
+        } elseif (! $this->isPathInside($databasePath, $persistentDiskPath)) {
             $errors[] = 'DB_DATABASE must be inside PERSISTENT_DISK_PATH.';
         }
 
@@ -74,8 +75,12 @@ final class ProductionConfiguration
             }
         }
 
-        if (! $this->isAbsolutePath((string) config('deployment.scheduler.heartbeat_path'))) {
+        $heartbeatPath = (string) config('deployment.scheduler.heartbeat_path');
+
+        if (! $this->isAbsolutePath($heartbeatPath)) {
             $errors[] = 'SCHEDULER_HEARTBEAT_PATH must be an absolute path on the persistent disk.';
+        } elseif (! $this->isPathInside($heartbeatPath, $persistentDiskPath)) {
+            $errors[] = 'SCHEDULER_HEARTBEAT_PATH must be inside PERSISTENT_DISK_PATH.';
         }
 
         if (config('deployment.scheduler.heartbeat_max_age_minutes', 0) < 1) {
@@ -119,8 +124,12 @@ final class ProductionConfiguration
             $errors[] = 'BACKUP_RETENTION_DAYS requires a positive human-selected value.';
         }
 
-        if (! $this->isAbsolutePath((string) config('deployment.backup.restore_evidence_path'))) {
+        $restoreEvidencePath = (string) config('deployment.backup.restore_evidence_path');
+
+        if (! $this->isAbsolutePath($restoreEvidencePath)) {
             $errors[] = 'BACKUP_RESTORE_EVIDENCE_PATH must be an absolute path on the persistent disk.';
+        } elseif (! $this->isPathInside($restoreEvidencePath, $persistentDiskPath)) {
+            $errors[] = 'BACKUP_RESTORE_EVIDENCE_PATH must be inside PERSISTENT_DISK_PATH.';
         }
 
         if (config('deployment.backup.restore_max_age_days', 0) < 1) {
@@ -156,6 +165,75 @@ final class ProductionConfiguration
     {
         return str_starts_with($path, DIRECTORY_SEPARATOR)
             || preg_match('/\A[A-Za-z]:[\\\\\/]/', $path) === 1;
+    }
+
+    private function isPathInside(string $path, string $directory): bool
+    {
+        $path = $this->normalizeAbsolutePath($path);
+        $directory = $this->normalizeAbsolutePath($directory);
+
+        if ($path === null || $directory === null || $path === $directory) {
+            return false;
+        }
+
+        if (preg_match('/\A[A-Z]:\//i', $directory) === 1) {
+            $path = strtolower($path);
+            $directory = strtolower($directory);
+        }
+
+        return str_starts_with($path, rtrim($directory, '/').'/');
+    }
+
+    private function normalizeAbsolutePath(string $path): ?string
+    {
+        $path = str_replace('\\', '/', $path);
+
+        if (preg_match('/\A([A-Za-z]:)\/(.*)\z/', $path, $matches) === 1) {
+            $prefix = strtoupper($matches[1]).'/';
+            $path = $matches[2];
+        } elseif (str_starts_with($path, '/')) {
+            $prefix = '/';
+            $path = ltrim($path, '/');
+        } else {
+            return null;
+        }
+
+        $segments = [];
+
+        foreach (explode('/', $path) as $segment) {
+            if ($segment === '' || $segment === '.') {
+                continue;
+            }
+
+            if ($segment === '..') {
+                if ($segments === []) {
+                    return null;
+                }
+
+                array_pop($segments);
+
+                continue;
+            }
+
+            $segments[] = $segment;
+        }
+
+        return $prefix.implode('/', $segments);
+    }
+
+    private function hasStrongApplicationKey(mixed $configuredKey, mixed $cipher): bool
+    {
+        if (! is_string($configuredKey) || ! is_string($cipher)) {
+            return false;
+        }
+
+        $key = str_starts_with($configuredKey, 'base64:')
+            ? base64_decode(substr($configuredKey, 7), strict: true)
+            : $configuredKey;
+
+        return is_string($key)
+            && Encrypter::supported($key, $cipher)
+            && strlen(count_chars($key, 3)) >= 16;
     }
 
     private function isCronExpression(mixed $expression): bool

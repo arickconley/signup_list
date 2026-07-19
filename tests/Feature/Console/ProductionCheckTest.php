@@ -46,3 +46,30 @@ test('production validation accepts the supported single-instance configuration'
     expect(Artisan::call('app:production-check'))->toBe(0)
         ->and(Artisan::output())->toContain('Production configuration is ready.');
 });
+
+test('production validation rejects invalid or weak application keys', function (string $key) {
+    configureReadyProduction();
+    config(['app.key' => $key]);
+
+    expect(Artisan::call('app:production-check'))->toBe(1)
+        ->and(Artisan::output())->toContain('APP_KEY must contain a strong generated application key.');
+})->with([
+    'invalid length' => ['x'],
+    'repeated bytes' => ['base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='],
+]);
+
+test('production validation requires operational evidence paths inside the persistent disk', function (string $outsidePath) {
+    configureReadyProduction();
+    config([
+        'deployment.scheduler.heartbeat_path' => $outsidePath.'/scheduler-heartbeat.json',
+        'deployment.backup.restore_evidence_path' => $outsidePath.'/restore-evidence.json',
+    ]);
+
+    expect(Artisan::call('app:production-check'))->toBe(1)
+        ->and(Artisan::output())
+        ->toContain('SCHEDULER_HEARTBEAT_PATH must be inside PERSISTENT_DISK_PATH.')
+        ->toContain('BACKUP_RESTORE_EVIDENCE_PATH must be inside PERSISTENT_DISK_PATH.');
+})->with([
+    'outside directory' => ['/tmp'],
+    'path traversal' => ['/srv/signup/../tmp'],
+]);

@@ -203,7 +203,17 @@ test('Dashboard empty and populated states support mobile and keyboard navigatio
         ->assertSee('No joined Signup Sheets yet')
         ->assertSeeHtml('href="'.route('sheets.create').'"')
         ->assertSeeHtml('<main id="main-content"')
-        ->assertSeeHtml('href="#main-content"');
+        ->assertSeeHtml('href="#main-content"')
+        ->assertSeeHtml('x-ref="navOpenTrigger"')
+        ->assertSeeHtml('x-ref="navCloseTrigger"')
+        ->assertSeeHtml('x-bind:inert="!desktop && !navOpen"')
+        ->assertSeeHtml('x-bind:aria-hidden="(!desktop && !navOpen).toString()"')
+        ->assertSeeHtml('x-on:click="openNav()"')
+        ->assertSeeHtml('x-on:click="closeNav()"');
+
+    expect($emptyResponse->getContent())
+        ->toContain('$refs.navCloseTrigger?.focus()')
+        ->toContain('$refs.navOpenTrigger?.focus()');
 
     expect(substr_count($emptyResponse->getContent(), '<h1'))->toBe(1);
 

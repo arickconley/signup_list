@@ -74,11 +74,15 @@ test('Owner edits an Option on a Draft Sheet', function () {
     $this->actingAs($owner);
 
     Livewire::test('pages::sheets.edit', ['sheet' => $sheet])
+        ->assertSeeHtml('id="edit-option-'.$option->id.'"')
+        ->assertSeeHtml('x-on:option-edit-closed.window')
         ->call('startEditingOption', $option->id)
+        ->assertSeeHtml('x-init="$nextTick(() => $el.querySelector(\'input\')?.focus())"')
         ->set('editOptionName', 'Evening cleanup')
         ->set('editOptionDescription', '')
         ->set('editOptionCapacity', '5')
         ->call('updateOption')
+        ->assertDispatched('option-edit-closed', optionId: $option->id)
         ->assertHasNoErrors()
         ->assertSee('Evening cleanup')
         ->assertSee('Capacity: 5')

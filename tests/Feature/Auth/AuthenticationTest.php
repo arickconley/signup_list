@@ -7,6 +7,13 @@ test('login screen can be rendered', function () {
     $response = $this->get(route('login'));
 
     $response->assertOk();
+
+    $document = new DOMDocument;
+    $document->loadHTML($response->getContent());
+    $xpath = new DOMXPath($document);
+    $forgotPassword = $xpath->query('//a[@href="'.route('password.request').'" and normalize-space()="Forgot password?"]')->item(0);
+
+    expect($forgotPassword?->getAttribute('class'))->toContain('min-h-11');
 });
 
 test('accounts can authenticate using the login screen', function () {

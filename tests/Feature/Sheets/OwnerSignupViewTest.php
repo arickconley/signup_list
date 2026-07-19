@@ -299,6 +299,13 @@ test('empty Signup View has keyboard grouping controls and loading and reactive 
 
     expect(substr_count($response->getContent(), '<h1'))->toBe(1);
 
+    $document = new DOMDocument;
+    $document->loadHTML($response->getContent());
+    $groupingResults = $document->getElementById('signup-grouping-results');
+
+    expect($groupingResults)->toBeInstanceOf(DOMElement::class)
+        ->and($groupingResults?->hasAttribute('aria-live'))->toBeFalse();
+
     $this->get(route('sheets.signups', $sheet).'?group=option')
         ->assertOk()
         ->assertSee('Grouped by Option')

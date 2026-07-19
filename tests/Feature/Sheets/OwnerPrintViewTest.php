@@ -330,7 +330,11 @@ test('Print View screen controls are removed when printing', function () {
         ->toContain('nav,')
         ->toContain('button,')
         ->toContain('[data-print-chrome]')
-        ->toContain('display: none !important;');
+        ->toContain('display: none !important;')
+        ->toContain('color-scheme: light !important;')
+        ->toContain('background: #fff !important;')
+        ->toContain('color: #0c0a09 !important;')
+        ->toContain('border-color: #57534e !important;');
 });
 
 test('empty Print Views stay HTML-only and explain missing data', function () {

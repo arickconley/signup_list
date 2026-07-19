@@ -74,9 +74,9 @@ class CompleteOpenSignup
             return new CompleteSignupResult(checkEmail: false);
         }
 
-        if ($writeResult['duplicate'] && ! $this->abuseControl->attemptSend($normalizedEmail, $input->ipAddress)) {
+        if (! $this->abuseControl->attemptSend($normalizedEmail, $input->ipAddress)) {
             Log::warning('signup.throttled', [
-                'operation' => 'duplicate_access_message',
+                'operation' => $writeResult['duplicate'] ? 'duplicate_access_message' : 'access_message',
                 'sheet_public_id' => $input->sheetPublicId,
             ]);
 
@@ -198,9 +198,6 @@ class CompleteOpenSignup
                         }
                     }
 
-                    $signupName = $name;
-                    $signupEmail = $email;
-                    $signupPhone = $phone;
                     $account = null;
 
                     if ($email !== null) {
@@ -213,27 +210,17 @@ class CompleteOpenSignup
                                 'timezone' => null,
                             ],
                         );
-
-                        $accountDefaults = $account->accountDefaults();
-                        $signupName = filled($accountDefaults->name) ? $accountDefaults->name : $name;
-                        $signupEmail = filled($accountDefaults->email) ? $accountDefaults->email : $email;
-                        $signupPhone = filled($accountDefaults->phone) ? $accountDefaults->phone : $phone;
                     }
 
-                    $canApplySubmittedConsent = $account === null || $account->wasRecentlyCreated;
-
                     $signup = $sheet->signups()->create([
-                        'name_snapshot' => $signupName,
-                        'email_snapshot' => $signupEmail,
-                        'phone_snapshot' => $signupPhone,
+                        'name_snapshot' => $name,
+                        'email_snapshot' => $email,
+                        'phone_snapshot' => $phone,
                         'name_consent' => $sheet->name_visibility === Sheet::VISIBILITY_PARTICIPANTS
-                            && $canApplySubmittedConsent
                             && $nameConsent,
                         'email_consent' => $sheet->email_visibility === Sheet::VISIBILITY_PARTICIPANTS
-                            && $canApplySubmittedConsent
                             && $emailConsent,
                         'phone_consent' => $sheet->phone_visibility === Sheet::VISIBILITY_PARTICIPANTS
-                            && $canApplySubmittedConsent
                             && $phoneConsent,
                     ]);
 

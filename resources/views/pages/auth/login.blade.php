@@ -62,7 +62,7 @@
             />
 
             <div class="flex justify-end">
-                <x-ui.link :href="route('password.request')" wire:navigate>{{ __('Forgot password?') }}</x-ui.link>
+                <x-ui.link :href="route('password.request')" wire:navigate action>{{ __('Forgot password?') }}</x-ui.link>
             </div>
 
             <x-ui.button variant="primary" type="submit" class="w-full">

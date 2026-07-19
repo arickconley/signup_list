@@ -96,7 +96,7 @@ test('profile form rejects an invalid timezone with an associated error', functi
         ->call('updateProfileInformation')
         ->assertHasErrors(['timezone'])
         ->assertSee('Please correct the highlighted fields.')
-        ->assertSeeHtml('aria-describedby="timezone-error"')
+        ->assertSeeHtml('aria-describedby="timezone-description timezone-error"')
         ->assertSeeHtml('id="timezone-error"');
 
     expect($account->refresh()->timezone)->toBe('America/Los_Angeles');

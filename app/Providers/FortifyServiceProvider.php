@@ -40,6 +40,7 @@ class FortifyServiceProvider extends ServiceProvider
         $this->configureActions();
         $this->configureViews();
         $this->configureRateLimiting();
+        $this->configurePasswordResetMiddleware();
         $this->configurePasskeyManagementMiddleware();
         $this->configureTwoFactorManagementMiddleware();
     }
@@ -87,6 +88,21 @@ class FortifyServiceProvider extends ServiceProvider
                 ($credentialId ?: $request->session()->getId()).'|'.$request->ip(),
             );
         });
+
+        RateLimiter::for('password-reset', function (Request $request) {
+            return Limit::perMinute(5)->by($request->ip());
+        });
+    }
+
+    /**
+     * Limit password reset mail work across addresses from one source.
+     */
+    private function configurePasswordResetMiddleware(): void
+    {
+        $this->addMiddlewareToRoutes(
+            ['password.email'],
+            ['throttle:password-reset'],
+        );
     }
 
     /**

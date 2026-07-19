@@ -7,6 +7,19 @@
             'includeLivewire' => false,
         ])
         <style media="print">
+            html,
+            body {
+                color-scheme: light !important;
+                background: #fff !important;
+            }
+
+            body * {
+                color: #0c0a09 !important;
+                border-color: #57534e !important;
+                background-color: transparent !important;
+                box-shadow: none !important;
+            }
+
             nav,
             button,
             [data-print-chrome] {
@@ -16,7 +29,7 @@
     </head>
     <body>
         <div data-print-chrome class="mx-auto flex max-w-5xl flex-col gap-3 px-4 pt-6 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-            <x-ui.link href="{{ route('sheets.signups', $sheet, absolute: false) }}">
+            <x-ui.link href="{{ route('sheets.signups', $sheet, absolute: false) }}" action>
                 {{ __('Back to Signup View') }}
             </x-ui.link>
             <x-ui.button type="button" onclick="window.print()">

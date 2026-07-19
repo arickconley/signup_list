@@ -340,7 +340,7 @@ new #[Layout('layouts.app', ['robots' => 'noindex, nofollow'])] #[Title('Signup 
         @endif
     </section>
 
-    <div id="signup-grouping-results" wire:loading.class="opacity-60" wire:target="showParticipantGrouping,showOptionGrouping" aria-live="polite">
+    <div id="signup-grouping-results" wire:loading.class="opacity-60" wire:target="showParticipantGrouping,showOptionGrouping">
     @if ($grouping === 'participant')
     <section class="mt-8" aria-labelledby="participant-grouping-title">
         <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">

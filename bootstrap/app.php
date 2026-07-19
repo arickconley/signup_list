@@ -9,6 +9,7 @@ use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Http\Request;
 use Laravel\Passkeys\Exceptions\InvalidPasskeyException;
+use Symfony\Component\HttpFoundation\Response;
 use Webauthn\Exception\WebauthnException;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -36,4 +37,12 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
+
+        $exceptions->respond(function (Response $response, Throwable $exception, Request $request): Response {
+            if ($request->is('sheets/*') || $request->is('signups/*')) {
+                $response->headers->set('X-Robots-Tag', 'noindex, nofollow');
+            }
+
+            return $response;
+        });
     })->create();
