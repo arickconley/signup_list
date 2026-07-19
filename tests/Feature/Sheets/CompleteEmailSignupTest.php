@@ -276,7 +276,7 @@ test('known and fresh emails receive the same capacity response while only the d
     Mail::assertQueuedCount(1);
 });
 
-test('existing Account Defaults initialize an isolated Signup snapshot', function () {
+test('existing Account Defaults initialize a private isolated Signup snapshot', function () {
     Mail::fake();
 
     $account = Account::factory()->create([
@@ -289,6 +289,9 @@ test('existing Account Defaults initialize an isolated Signup snapshot', functio
         'state' => Sheet::STATE_PUBLISHED,
         'participation_policy' => Sheet::PARTICIPATION_OPEN,
         'selection_maximum' => 1,
+        'name_visibility' => Sheet::VISIBILITY_PARTICIPANTS,
+        'email_visibility' => Sheet::VISIBILITY_PARTICIPANTS,
+        'phone_visibility' => Sheet::VISIBILITY_PARTICIPANTS,
     ]);
     $option = $sheet->options()->create([
         'name' => 'Cleanup',
@@ -300,6 +303,9 @@ test('existing Account Defaults initialize an isolated Signup snapshot', functio
         ->set('name', 'Submitted Snapshot Name')
         ->set('email', ' EXISTING@EXAMPLE.COM ')
         ->set('phone', '555-0222')
+        ->set('nameConsent', true)
+        ->set('emailConsent', true)
+        ->set('phoneConsent', true)
         ->set('selectedOptions', [$option->public_id])
         ->call('complete')
         ->assertHasNoErrors()
@@ -318,7 +324,16 @@ test('existing Account Defaults initialize an isolated Signup snapshot', functio
         ->email_snapshot->toBe('existing@example.com')
         ->phone_snapshot->toBe('555-0111')
         ->account_id->toBeNull()
+        ->name_consent->toBeFalse()
+        ->email_consent->toBeFalse()
+        ->phone_consent->toBeFalse()
         ->and($signup->pendingAccountAssociation?->account_id)->toBe($account->id);
+
+    $this->get(route('sheets.show', $sheet))
+        ->assertOk()
+        ->assertDontSee('Existing Profile Name')
+        ->assertDontSee('existing@example.com')
+        ->assertDontSee('555-0111');
 
     $account->update([
         'name' => 'Later Profile Name',

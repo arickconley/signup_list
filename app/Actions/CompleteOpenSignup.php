@@ -198,15 +198,20 @@ class CompleteOpenSignup
                         $signupPhone = filled($accountDefaults->phone) ? $accountDefaults->phone : $phone;
                     }
 
+                    $canApplySubmittedConsent = $account === null || $account->wasRecentlyCreated;
+
                     $signup = $sheet->signups()->create([
                         'name_snapshot' => $signupName,
                         'email_snapshot' => $signupEmail,
                         'phone_snapshot' => $signupPhone,
                         'name_consent' => $sheet->name_visibility === Sheet::VISIBILITY_PARTICIPANTS
+                            && $canApplySubmittedConsent
                             && $nameConsent,
                         'email_consent' => $sheet->email_visibility === Sheet::VISIBILITY_PARTICIPANTS
+                            && $canApplySubmittedConsent
                             && $emailConsent,
                         'phone_consent' => $sheet->phone_visibility === Sheet::VISIBILITY_PARTICIPANTS
+                            && $canApplySubmittedConsent
                             && $phoneConsent,
                     ]);
 
