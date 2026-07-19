@@ -119,3 +119,37 @@ test('Account dashboard lists only attached Signups on non-archived Signup Sheet
         ->assertDontSee('Archived Private Sheet')
         ->assertDontSee('Other Account Sheet');
 });
+
+test('Account dashboard links only currently editable attached Signups to participant editing', function () {
+    $account = Account::factory()->create();
+    $openSheet = Sheet::factory()->create([
+        'title' => 'Editable Signup Sheet',
+        'state' => Sheet::STATE_PUBLISHED,
+        'selection_maximum' => 1,
+    ]);
+    $editableSignup = $openSheet->signups()->create([
+        'name_snapshot' => 'Editable Participant',
+        'email_snapshot' => $account->email,
+    ]);
+    $editableSignup->forceFill(['account_id' => $account->id])->save();
+
+    $closedSheet = Sheet::factory()->create([
+        'title' => 'Closed Signup Sheet',
+        'state' => Sheet::STATE_PUBLISHED,
+        'deadline_at' => now()->subMinute(),
+        'selection_maximum' => 1,
+    ]);
+    $closedSignup = $closedSheet->signups()->create([
+        'name_snapshot' => 'Closed Participant',
+        'email_snapshot' => $account->email,
+    ]);
+    $closedSignup->forceFill(['account_id' => $account->id])->save();
+
+    $this->actingAs($account)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertSee('Editable Signup Sheet')
+        ->assertSee('Closed Signup Sheet')
+        ->assertSeeHtml('href="'.route('signups.edit', $editableSignup, absolute: false).'"')
+        ->assertDontSeeHtml('href="'.route('signups.edit', $closedSignup, absolute: false).'"');
+});

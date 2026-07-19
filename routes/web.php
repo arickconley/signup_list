@@ -18,6 +18,7 @@ Route::get('access/{challenge}/link/{token}', [AccountAccessController::class, '
 
 Route::middleware(['auth', 'verified', 'profile.complete'])->group(function () {
     Route::get('dashboard', DashboardController::class)->name('dashboard');
+    Route::livewire('signups/{signup}/edit', 'pages::signups.edit')->name('signups.edit');
     Route::livewire('sheets/create', 'pages::sheets.create')->name('sheets.create');
     Route::livewire('sheets/{sheet}/edit', 'pages::sheets.edit')->name('sheets.edit');
     Route::livewire('sheets/{sheet}/signups', 'pages::sheets.signups')

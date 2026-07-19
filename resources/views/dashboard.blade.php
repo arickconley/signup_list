@@ -45,21 +45,28 @@
 
                 <div class="mt-4 grid gap-4 sm:grid-cols-2">
                     @foreach ($attachedSignups as $signup)
-                        <a href="{{ route('sheets.show', $signup->sheet, absolute: false) }}" wire:navigate class="group rounded-2xl border border-stone-200 bg-white p-5 shadow-sm transition hover:border-amber-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 dark:border-stone-800 dark:bg-stone-900 dark:hover:border-amber-400">
-                            <span class="text-xs font-bold uppercase tracking-[0.16em] text-amber-700 dark:text-amber-400">{{ __('Signup') }}</span>
-                            <h3 class="mt-2 font-display text-xl font-semibold group-hover:text-amber-800 dark:group-hover:text-amber-300">{{ $signup->sheet->title }}</h3>
-                            <p class="mt-2 text-sm text-stone-600 dark:text-stone-400">
-                                {{ __('Signed up as :name', ['name' => $signup->name_snapshot]) }}
-                            </p>
-                            <ul class="mt-4 flex flex-wrap gap-2" aria-label="{{ __('Your selections') }}">
-                                @foreach ($signup->optionClaims->sortBy('option.position') as $claim)
-                                    <li class="rounded-full bg-amber-100 px-3 py-1 text-sm font-medium text-amber-950 dark:bg-amber-300 dark:text-stone-950">
-                                        {{ $claim->option->name }}
-                                    </li>
-                                @endforeach
-                            </ul>
-                            <span class="mt-5 inline-block text-sm font-semibold text-stone-700 dark:text-stone-300">{{ __('View Signup Sheet') }}</span>
-                        </a>
+                        <article class="group rounded-2xl border border-stone-200 bg-white p-5 shadow-sm transition hover:border-amber-500 dark:border-stone-800 dark:bg-stone-900 dark:hover:border-amber-400">
+                            <a href="{{ route('sheets.show', $signup->sheet, absolute: false) }}" wire:navigate class="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-4 dark:focus-visible:ring-offset-stone-900">
+                                <span class="text-xs font-bold uppercase tracking-[0.16em] text-amber-700 dark:text-amber-400">{{ __('Signup') }}</span>
+                                <h3 class="mt-2 font-display text-xl font-semibold group-hover:text-amber-800 dark:group-hover:text-amber-300">{{ $signup->sheet->title }}</h3>
+                                <p class="mt-2 text-sm text-stone-600 dark:text-stone-400">
+                                    {{ __('Signed up as :name', ['name' => $signup->name_snapshot]) }}
+                                </p>
+                                <ul class="mt-4 flex flex-wrap gap-2" aria-label="{{ __('Your selections') }}">
+                                    @foreach ($signup->optionClaims->sortBy('option.position') as $claim)
+                                        <li class="rounded-full bg-amber-100 px-3 py-1 text-sm font-medium text-amber-950 dark:bg-amber-300 dark:text-stone-950">
+                                            {{ $claim->option->name }}
+                                        </li>
+                                    @endforeach
+                                </ul>
+                            </a>
+                            <div class="mt-5 flex flex-wrap items-center gap-x-5 gap-y-3 text-sm">
+                                <x-ui.link :href="route('sheets.show', $signup->sheet, absolute: false)" wire:navigate>{{ __('View Signup Sheet') }}</x-ui.link>
+                                @if ($signup->canBeEditedBy(auth()->user()))
+                                    <x-ui.link :href="route('signups.edit', $signup, absolute: false)" wire:navigate>{{ __('Edit Signup') }}</x-ui.link>
+                                @endif
+                            </div>
+                        </article>
                     @endforeach
                 </div>
             </section>
