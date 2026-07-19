@@ -19,10 +19,10 @@ final class DeleteOwnerOption
         private readonly ImmediateDatabaseTransaction $immediateTransaction,
     ) {}
 
-    public function handle(Account $owner, Sheet $sheet, int $optionId): void
+    public function handle(Account $owner, Sheet $sheet, int $optionId, int $confirmedClaimCount): void
     {
         try {
-            $changes = $this->immediateTransaction->run(function () use ($owner, $sheet, $optionId): array {
+            $ownerChangeNotifications = $this->immediateTransaction->run(function () use ($owner, $sheet, $optionId, $confirmedClaimCount): array {
                 $currentOwner = Account::query()->whereKey($owner->id)->first();
                 $currentSheet = Sheet::query()
                     ->whereKey($sheet->id)
@@ -34,6 +34,10 @@ final class DeleteOwnerOption
                     ->first();
 
                 if ($currentOwner === null || $currentSheet === null || $option === null) {
+                    throw new CannotDeleteOwnerOption('This Option cannot be deleted.');
+                }
+
+                if ($option->optionClaims()->count() !== $confirmedClaimCount) {
                     throw new CannotDeleteOwnerOption('This Option cannot be deleted.');
                 }
 
@@ -49,12 +53,13 @@ final class DeleteOwnerOption
                     ->whereNotNull('email_snapshot')
                     ->orderBy('id')
                     ->get();
-                $changes = $affectedSignups->map(fn (Signup $signup): array => [
+                $ownerChangeNotifications = $affectedSignups->map(fn (Signup $signup): array => [
                     'email' => $signup->email_snapshot,
                     'sheet_title' => $currentSheet->title,
                     'sheet_url' => route('sheets.show', $currentSheet),
                     'before_selection_names' => $this->selectionNames($signup),
                     'after_selection_names' => $this->selectionNames($signup, $option->id),
+                    'removed_option_name' => $option->name,
                 ])->all();
 
                 $option->optionClaims()->delete();
@@ -79,7 +84,7 @@ final class DeleteOwnerOption
                     ]);
                 }
 
-                return $changes;
+                return $ownerChangeNotifications;
             });
         } catch (ImmediateTransactionBusy $exception) {
             throw new CannotDeleteOwnerOption(
@@ -88,12 +93,13 @@ final class DeleteOwnerOption
             );
         }
 
-        foreach ($changes as $change) {
-            Mail::to($change['email'])->queue(new OwnerChangedSignupMail(
-                sheetTitle: $change['sheet_title'],
-                sheetUrl: $change['sheet_url'],
-                beforeSelectionNames: $change['before_selection_names'],
-                afterSelectionNames: $change['after_selection_names'],
+        foreach ($ownerChangeNotifications as $ownerChangeNotification) {
+            Mail::to($ownerChangeNotification['email'])->queue(new OwnerChangedSignupMail(
+                sheetTitle: $ownerChangeNotification['sheet_title'],
+                sheetUrl: $ownerChangeNotification['sheet_url'],
+                beforeSelectionNames: $ownerChangeNotification['before_selection_names'],
+                afterSelectionNames: $ownerChangeNotification['after_selection_names'],
+                removedOptionName: $ownerChangeNotification['removed_option_name'],
             ));
         }
     }

@@ -22,6 +22,7 @@ final class OwnerChangedSignupMail extends Mailable implements ShouldBeEncrypted
         public readonly string $sheetUrl,
         public readonly array $beforeSelectionNames,
         public readonly array $afterSelectionNames,
+        public readonly ?string $removedOptionName = null,
     ) {}
 
     public function envelope(): Envelope

@@ -222,13 +222,11 @@ new #[Layout('layouts.app', ['robots' => 'noindex, nofollow'])] #[Title('Signup 
                     <option value="option" @selected($grouping === 'option')>{{ __('Option') }}</option>
                 </select>
             </div>
-            <div class="flex min-h-11 items-center gap-3 sm:self-end">
-                <input id="print-email" type="checkbox" name="email" value="1" class="size-5 rounded border-stone-300 text-teal-700 focus:ring-teal-600 dark:border-stone-700 dark:bg-stone-950">
-                <label for="print-email" class="text-sm font-semibold">{{ __('Show email') }}</label>
+            <div class="sm:self-end">
+                <x-ui.checkbox id="print-email" name="email" value="1" :label="__('Show email')" />
             </div>
-            <div class="flex min-h-11 items-center gap-3 sm:self-end">
-                <input id="print-phone" type="checkbox" name="phone" value="1" class="size-5 rounded border-stone-300 text-teal-700 focus:ring-teal-600 dark:border-stone-700 dark:bg-stone-950">
-                <label for="print-phone" class="text-sm font-semibold">{{ __('Show phone') }}</label>
+            <div class="sm:self-end">
+                <x-ui.checkbox id="print-phone" name="phone" value="1" :label="__('Show phone')" />
             </div>
         </fieldset>
 

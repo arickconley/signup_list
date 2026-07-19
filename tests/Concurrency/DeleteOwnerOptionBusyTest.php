@@ -85,6 +85,7 @@ test('busy Owner Option deletion is bounded atomic and recoverable around a conc
             ]))
             ->all();
         $claimIdsBeforeFailure = $existingSignup->optionClaims()->orderBy('id')->pluck('id')->all();
+        $confirmedClaimCount = $target->optionClaims()->count();
 
         DB::disconnect('sqlite');
 
@@ -118,7 +119,7 @@ test('busy Owner Option deletion is bounded atomic and recoverable around a conc
         $failure = null;
 
         try {
-            app(DeleteOwnerOption::class)->handle($owner, $sheet, $target->id);
+            app(DeleteOwnerOption::class)->handle($owner, $sheet, $target->id, $confirmedClaimCount);
         } catch (Throwable $exception) {
             $failure = $exception;
         }
@@ -168,7 +169,11 @@ test('busy Owner Option deletion is bounded atomic and recoverable around a conc
             ->and($concurrentSignup->optionClaims()->where('option_id', $target->id)->exists())->toBeTrue();
         Mail::assertNothingQueued();
 
-        app(DeleteOwnerOption::class)->handle($owner, $sheet, $target->id);
+        $freshConfirmedClaimCount = $target->optionClaims()->count();
+
+        expect($freshConfirmedClaimCount)->toBe(2);
+
+        app(DeleteOwnerOption::class)->handle($owner, $sheet, $target->id, $freshConfirmedClaimCount);
 
         expect($sheet->options()->whereKey($target->id)->exists())->toBeFalse()
             ->and(OptionClaim::query()->where('option_id', $target->id)->exists())->toBeFalse()

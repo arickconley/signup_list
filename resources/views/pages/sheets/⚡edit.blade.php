@@ -9,6 +9,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Validator;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
@@ -52,8 +53,10 @@ new #[Title('Edit Signup Sheet')] class extends Component
 
     public string $editOptionCapacity = '';
 
+    #[Locked]
     public ?int $deletingOptionId = null;
 
+    #[Locked]
     public int $deletingOptionClaimCount = 0;
 
     public function mount(Sheet $sheet): void
@@ -61,6 +64,14 @@ new #[Title('Edit Signup Sheet')] class extends Component
         abort_unless($sheet->owner_id === Auth::id(), 404);
         $sheet->refresh();
         abort_if($sheet->isArchived(), 404);
+
+        Sheet::query()
+            ->whereKey($sheet->id)
+            ->where('owner_id', Auth::id())
+            ->where('state', Sheet::STATE_PUBLISHED)
+            ->where('deadline_at', '<=', now())
+            ->update(['state' => Sheet::STATE_CLOSED]);
+        $sheet->refresh();
 
         $this->sheet = $sheet;
         $this->title = $sheet->title;
@@ -204,9 +215,10 @@ new #[Title('Edit Signup Sheet')] class extends Component
         abort_unless($owner instanceof Account, 403);
 
         $optionId = $this->deletingOptionId;
+        $confirmedClaimCount = $this->deletingOptionClaimCount;
 
         try {
-            $deleteOwnerOption->handle($owner, $this->sheet, $optionId);
+            $deleteOwnerOption->handle($owner, $this->sheet, $optionId, $confirmedClaimCount);
         } catch (CannotDeleteOwnerOption $exception) {
             $this->sheet->refresh();
             $this->selectionMaximum = (string) $this->sheet->selection_maximum;

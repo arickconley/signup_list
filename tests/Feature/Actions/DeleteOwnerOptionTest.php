@@ -32,7 +32,7 @@ test('Owner deletes an unclaimed Published Option and preserves the remaining Op
     $signup = $sheet->signups()->create(['name_snapshot' => 'Existing participant']);
     $signup->optionClaims()->create(['option_id' => $remainingOption->id]);
 
-    app(DeleteOwnerOption::class)->handle($owner, $sheet, $deletedOption->id);
+    app(DeleteOwnerOption::class)->handle($owner, $sheet, $deletedOption->id, 0);
 
     expect($sheet->options()->whereKey($deletedOption->id)->exists())->toBeFalse()
         ->and($sheet->refresh()->selection_maximum)->toBe(1)
@@ -136,11 +136,11 @@ test('direct deletion rejects unauthorized and cross-Sheet targets without mutat
         Mail::assertNothingQueued();
     };
 
-    expect(fn () => app(DeleteOwnerOption::class)->handle($otherAccount, $sheet, $target->id))
+    expect(fn () => app(DeleteOwnerOption::class)->handle($otherAccount, $sheet, $target->id, 1))
         ->toThrow(CannotDeleteOwnerOption::class, 'This Option cannot be deleted.');
     $assertUnchanged();
 
-    expect(fn () => app(DeleteOwnerOption::class)->handle($owner, $sheet, $otherSheetOption->id))
+    expect(fn () => app(DeleteOwnerOption::class)->handle($owner, $sheet, $otherSheetOption->id, 0))
         ->toThrow(CannotDeleteOwnerOption::class, 'This Option cannot be deleted.');
     $assertUnchanged();
 });
@@ -192,7 +192,7 @@ test('claimed Option deletion queues immutable after-commit messages to affected
     ]);
     $unrelated->optionClaims()->create(['option_id' => $retainedOption->id]);
 
-    app(DeleteOwnerOption::class)->handle($owner, $sheet, $deletedOption->id);
+    app(DeleteOwnerOption::class)->handle($owner, $sheet, $deletedOption->id, 3);
 
     Mail::assertQueuedTimes(OwnerChangedSignupMail::class, 2);
     $mails = Mail::queued(OwnerChangedSignupMail::class);
@@ -208,6 +208,7 @@ test('claimed Option deletion queues immutable after-commit messages to affected
         ->toBeInstanceOf(ShouldQueueAfterCommit::class)
         ->and($firstMail->sheetTitle)->toBe('Neighborhood meal train')
         ->and($firstMail->sheetUrl)->toBe(route('sheets.show', $sheet))
+        ->and($firstMail->removedOptionName)->toBe('Welcome table')
         ->and($firstMail->beforeSelectionNames)->toBe(['Welcome table', 'Cleanup'])
         ->and($firstMail->afterSelectionNames)->toBe(['Cleanup'])
         ->and($secondMail)
@@ -215,6 +216,7 @@ test('claimed Option deletion queues immutable after-commit messages to affected
         ->toBeInstanceOf(ShouldQueueAfterCommit::class)
         ->and($secondMail->sheetTitle)->toBe('Neighborhood meal train')
         ->and($secondMail->sheetUrl)->toBe(route('sheets.show', $sheet))
+        ->and($secondMail->removedOptionName)->toBe('Welcome table')
         ->and($secondMail->beforeSelectionNames)->toBe(['Welcome table'])
         ->and($secondMail->afterSelectionNames)->toBe([]);
     Mail::assertNotQueued(
@@ -224,14 +226,17 @@ test('claimed Option deletion queues immutable after-commit messages to affected
 
     $sheet->update(['title' => 'Renamed Sheet']);
     $retainedOption->update(['name' => 'Renamed Option']);
+    $deletedOption->name = 'Renamed deleted Option';
 
     foreach ([$firstMail, $secondMail] as $mail) {
         expect(strip_tags($mail->render()))
             ->toContain('Neighborhood meal train')
             ->toContain('Welcome table')
+            ->toContain('Removed Option: Welcome table')
             ->toContain('The Owner changed your Signup')
             ->not->toContain('Renamed Sheet')
-            ->not->toContain('Renamed Option');
+            ->not->toContain('Renamed Option')
+            ->not->toContain('Renamed deleted Option');
     }
 
     expect(strip_tags($firstMail->render()))->toContain('Cleanup')
@@ -298,7 +303,7 @@ test('Owner deletes a claimed Option while preserving Signups and other claims',
         ->map(fn ($option): array => $option->only(['id', 'name', 'capacity', 'claimed_count']))
         ->all();
 
-    app(DeleteOwnerOption::class)->handle($owner, $sheet, $deletedOption->id);
+    app(DeleteOwnerOption::class)->handle($owner, $sheet, $deletedOption->id, 2);
 
     expect($sheet->options()->whereKey($deletedOption->id)->exists())->toBeFalse()
         ->and(OptionClaim::query()->whereIn('id', $deletedClaims->pluck('id'))->exists())->toBeFalse()
@@ -326,7 +331,7 @@ test('Published Sheet keeps at least one Option', function () {
         'position' => 1,
     ]);
 
-    expect(fn () => app(DeleteOwnerOption::class)->handle($owner, $sheet, $option->id))
+    expect(fn () => app(DeleteOwnerOption::class)->handle($owner, $sheet, $option->id, 0))
         ->toThrow(CannotDeleteOwnerOption::class, 'A Published Sheet must keep at least one Option.');
 
     expect($sheet->options()->whereKey($option->id)->exists())->toBeTrue()

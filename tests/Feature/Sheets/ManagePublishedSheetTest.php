@@ -242,6 +242,114 @@ test('Owner confirms unclaimed Option deletion from the Published Sheet editor',
     Mail::assertNothingQueued();
 });
 
+test('Owner stale claimed-count confirmation preserves newly claimed Option until a fresh request', function () {
+    Mail::fake();
+
+    $owner = Account::factory()->create();
+    $sheet = Sheet::factory()->for($owner, 'owner')->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_OPEN,
+        'selection_maximum' => 2,
+    ]);
+    $target = $sheet->options()->create([
+        'name' => 'Welcome table',
+        'capacity' => 3,
+        'claimed_count' => 1,
+        'position' => 1,
+    ]);
+    $retained = $sheet->options()->create([
+        'name' => 'Cleanup',
+        'capacity' => 3,
+        'position' => 2,
+    ]);
+    $existingSignup = $sheet->signups()->create([
+        'name_snapshot' => 'Existing participant',
+        'email_snapshot' => 'existing@example.test',
+    ]);
+    $existingClaim = $existingSignup->optionClaims()->create(['option_id' => $target->id]);
+
+    $component = Livewire::actingAs($owner)
+        ->test('pages::sheets.edit', ['sheet' => $sheet])
+        ->call('requestOptionDeletion', $target->id)
+        ->assertSet('deletingOptionId', $target->id)
+        ->assertSet('deletingOptionClaimCount', 1)
+        ->assertSee('This will remove 1 Option Claim.');
+
+    app(CompleteOpenSignup::class)->handle(new CompleteSignupInput(
+        sheetPublicId: $sheet->public_id,
+        name: 'New participant',
+        phone: null,
+        optionPublicIds: [$target->public_id],
+    ));
+
+    $optionFields = ['id', 'sheet_id', 'name', 'capacity', 'claimed_count', 'position'];
+    $optionState = $sheet->options()
+        ->orderBy('position')
+        ->orderBy('id')
+        ->get()
+        ->map(fn ($option): array => $option->only($optionFields))
+        ->all();
+    $signupSnapshots = $sheet->signups()->orderBy('id')->get()->map(
+        fn (Signup $signup): array => $signup->only([
+            'id',
+            'name_snapshot',
+            'email_snapshot',
+            'phone_snapshot',
+            'name_consent',
+            'email_consent',
+            'phone_consent',
+        ]),
+    )->all();
+    $claimIds = OptionClaim::query()->orderBy('id')->pluck('id')->all();
+
+    $component
+        ->call('confirmOptionDeletion')
+        ->assertHasErrors(['optionDeletion'])
+        ->assertSee('This Option cannot be deleted.')
+        ->assertSet('deletingOptionId', null)
+        ->assertSet('deletingOptionClaimCount', 0)
+        ->assertSet('announcement', 'This Option cannot be deleted.')
+        ->assertSet('selectionMaximum', '2')
+        ->assertDontSee('Option deleted.');
+
+    expect($sheet->options()->whereKey($target->id)->exists())->toBeTrue()
+        ->and($sheet->options()->whereKey($retained->id)->exists())->toBeTrue()
+        ->and($sheet->options()
+            ->orderBy('position')
+            ->orderBy('id')
+            ->get()
+            ->map(fn ($option): array => $option->only($optionFields))
+            ->all())->toBe($optionState)
+        ->and(OptionClaim::query()->orderBy('id')->pluck('id')->all())->toBe($claimIds)
+        ->and(OptionClaim::query()->find($existingClaim->id)?->option_id)->toBe($target->id)
+        ->and($sheet->signups()->orderBy('id')->get()->map(
+            fn (Signup $signup): array => $signup->only([
+                'id',
+                'name_snapshot',
+                'email_snapshot',
+                'phone_snapshot',
+                'name_consent',
+                'email_consent',
+                'phone_consent',
+            ]),
+        )->all())->toBe($signupSnapshots)
+        ->and($sheet->refresh()->selection_maximum)->toBe(2);
+    Mail::assertNothingQueued();
+
+    $component
+        ->call('requestOptionDeletion', $target->id)
+        ->assertSet('deletingOptionClaimCount', 2)
+        ->call('confirmOptionDeletion')
+        ->assertHasNoErrors()
+        ->assertSet('announcement', 'Option deleted.')
+        ->assertSet('selectionMaximum', '1');
+
+    expect($sheet->options()->whereKey($target->id)->exists())->toBeFalse()
+        ->and($sheet->options()->whereKey($retained->id)->exists())->toBeTrue()
+        ->and($sheet->signups()->count())->toBe(2);
+    Mail::assertQueuedCount(1);
+});
+
 test('other Account cannot confirm a post-mount Option deletion', function () {
     Mail::fake();
 
@@ -345,7 +453,7 @@ test('stale Published Option deletion confirmation fails safely', function () {
         ->assertSet('deletingOptionId', $target->id)
         ->assertSet('deletingOptionClaimCount', 1);
 
-    app(DeleteOwnerOption::class)->handle($owner, $sheet, $target->id);
+    app(DeleteOwnerOption::class)->handle($owner, $sheet, $target->id, 1);
 
     $component
         ->call('confirmOptionDeletion')
@@ -707,7 +815,7 @@ test('other Account cannot invoke Owner Sheet lifecycle actions', function (stri
     'irreversible archive' => ['archiveSheet', Sheet::STATE_PUBLISHED],
 ]);
 
-test('Published deadline edits immediately close and reopen participant actions', function () {
+test('Published deadline edits immediately close and explicit reopen restores participant actions', function () {
     $this->travelTo(Carbon::parse('2026-08-01 12:00:00 UTC'));
 
     $owner = Account::factory()->create();
@@ -760,7 +868,7 @@ test('Published deadline edits immediately close and reopen participant actions'
     Livewire::actingAs($owner)
         ->test('pages::sheets.edit', ['sheet' => $sheet->refresh()])
         ->set('deadlineAt', '2026-08-11T23:59')
-        ->call('saveDetails')
+        ->call('reopenSheet')
         ->assertHasNoErrors();
 
     Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
@@ -773,6 +881,69 @@ test('Published deadline edits immediately close and reopen participant actions'
     expect($signup->refresh()->id)->toBe($signup->id)
         ->and($signup->optionClaims()->sole()->id)->toBe($claim->id)
         ->and($option->refresh()->claimed_count)->toBe(2);
+});
+
+test('expired Published Sheet is persisted Closed in the Owner editor until explicitly reopened', function () {
+    $this->travelTo(Carbon::parse('2026-08-01 18:59:59 UTC'));
+
+    $owner = Account::factory()->create(['timezone' => 'America/Los_Angeles']);
+    $sheet = Sheet::factory()->for($owner, 'owner')->create([
+        'title' => 'Expired field day',
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_OPEN,
+        'selection_maximum' => 1,
+        'deadline_at' => Carbon::parse('2026-08-01 19:00:00 UTC'),
+    ]);
+    $option = $sheet->options()->create([
+        'name' => 'Afternoon cleanup',
+        'capacity' => 2,
+        'position' => 1,
+    ]);
+    $participant = Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
+        ->set('name', 'Blocked before explicit reopen')
+        ->set('selectedOptions', [$option->public_id]);
+
+    $this->travelTo(Carbon::parse('2026-08-01 19:00:00 UTC'));
+
+    $editor = Livewire::actingAs($owner)
+        ->test('pages::sheets.edit', ['sheet' => $sheet])
+        ->assertSee('Closed Sheet')
+        ->assertSee('Reopen Sheet')
+        ->assertDontSee('Published Sheet')
+        ->assertDontSee('Close Sheet');
+
+    expect($sheet->refresh()->state)->toBe(Sheet::STATE_CLOSED);
+
+    $editor
+        ->set('title', 'Updated expired field day')
+        ->set('deadlineAt', '2026-08-02T12:00')
+        ->call('saveDetails')
+        ->assertHasNoErrors();
+
+    expect($sheet->refresh())
+        ->title->toBe('Updated expired field day')
+        ->state->toBe(Sheet::STATE_CLOSED)
+        ->deadline_at->toIso8601String()->toBe('2026-08-02T19:00:00+00:00');
+
+    $participant
+        ->call('complete')
+        ->assertHasErrors(['signup'])
+        ->assertSee('This Signup Sheet is no longer open for signups.');
+
+    $editor
+        ->call('reopenSheet')
+        ->assertHasNoErrors()
+        ->assertSee('Signup Sheet reopened.');
+
+    Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
+        ->set('name', 'Allowed after explicit reopen')
+        ->set('selectedOptions', [$option->public_id])
+        ->call('complete')
+        ->assertHasNoErrors()
+        ->assertSee('Signup complete');
+
+    expect($sheet->refresh()->state)->toBe(Sheet::STATE_PUBLISHED)
+        ->and($sheet->signups()->count())->toBe(1);
 });
 
 test('Owner manually closes a Published Sheet before its deadline and new Signups are rejected', function () {

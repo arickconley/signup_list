@@ -3,6 +3,10 @@
 
 {{ __('The Owner changed your Signup for :sheet.', ['sheet' => $sheetTitle]) }}
 
+@if ($removedOptionName !== null)
+{{ __('Removed Option: :name', ['name' => $removedOptionName]) }}
+@endif
+
 ## {{ __('Before selections') }}
 
 @foreach ($beforeSelectionNames as $selectionName)

@@ -16,12 +16,12 @@
     </head>
     <body>
         <div data-print-chrome class="mx-auto flex max-w-5xl flex-col gap-3 px-4 pt-6 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-            <a href="{{ route('sheets.signups', $sheet, absolute: false) }}" class="inline-flex min-h-11 items-center justify-center rounded-lg border border-stone-300 bg-white px-4 text-sm font-semibold shadow-sm hover:border-teal-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2">
+            <x-ui.link href="{{ route('sheets.signups', $sheet, absolute: false) }}">
                 {{ __('Back to Signup View') }}
-            </a>
-            <button type="button" onclick="window.print()" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-teal-700 px-4 text-sm font-semibold text-white shadow-sm hover:bg-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2">
+            </x-ui.link>
+            <x-ui.button type="button" onclick="window.print()">
                 {{ __('Print') }}
-            </button>
+            </x-ui.button>
         </div>
         <main id="main-content" class="mx-auto max-w-5xl px-4 py-8 sm:px-6">
             <header class="border-b-2 border-stone-900 pb-6">
@@ -161,7 +161,7 @@
                                 <tr class="border-b border-stone-300 align-top">
                                     <th scope="row" class="py-3 pe-4 font-semibold">{{ $option->name }}</th>
                                     @if ($option->optionClaims->isEmpty())
-                                        <td class="px-4 py-3">{{ __('No Signups') }}</td>
+                                        <td class="px-4 py-3">{{ __('No Option Claims') }}</td>
                                         @if ($showEmail)
                                             <td class="px-4 py-3" aria-label="{{ __('No submitted emails') }}">—</td>
                                         @endif

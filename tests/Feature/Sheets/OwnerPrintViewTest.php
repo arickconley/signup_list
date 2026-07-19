@@ -143,7 +143,7 @@ test('Owner groups Print View by Option with enabled contact columns', function 
         ->assertSeeHtml('<th scope="col">Phone</th>')
         ->assertSeeInOrder([
             $unclaimedOption->name,
-            'No Signups',
+            'No Option Claims',
             $claimedOption->name,
             'Option Participant',
             'option-participant@example.test',
