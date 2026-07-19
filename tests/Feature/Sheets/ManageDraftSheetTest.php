@@ -199,6 +199,25 @@ test('removing an Option clamps selection maximum and keeps positions contiguous
         ->and($remainingOptions->pluck('position')->all())->toBe([1, 2]);
 });
 
+test('Owner can change a Signup Sheet participation policy', function () {
+    $owner = Account::factory()->create();
+    $sheet = Sheet::factory()->for($owner, 'owner')->create();
+    $this->actingAs($owner);
+
+    Livewire::test('pages::sheets.edit', ['sheet' => $sheet])
+        ->assertSet('participationPolicy', Sheet::PARTICIPATION_OPEN)
+        ->assertSee('Open Participation')
+        ->assertSee('Verified Participation')
+        ->set('participationPolicy', Sheet::PARTICIPATION_VERIFIED)
+        ->call('saveDetails')
+        ->assertHasNoErrors()
+        ->assertSee('Verified Participation');
+
+    Livewire::test('pages::sheets.edit', ['sheet' => $sheet->refresh()])
+        ->assertSet('participationPolicy', Sheet::PARTICIPATION_VERIFIED)
+        ->assertSee('Verified Participation');
+});
+
 test('Owner publishes a valid Draft Sheet to its UUID link', function () {
     $owner = Account::factory()->create();
     $sheet = Sheet::factory()->for($owner, 'owner')->create(['selection_maximum' => 1]);

@@ -26,6 +26,8 @@ new #[Title('Edit Draft Sheet')] class extends Component
 
     public string $selectionMaximum = '';
 
+    public string $participationPolicy = Sheet::PARTICIPATION_OPEN;
+
     public string $announcement = '';
 
     public string $optionName = '';
@@ -55,6 +57,7 @@ new #[Title('Edit Draft Sheet')] class extends Component
         $this->selectionMaximum = $sheet->selection_maximum === null
             ? ''
             : (string) $sheet->selection_maximum;
+        $this->participationPolicy = $sheet->participation_policy;
     }
 
     public function hydrate(): void
@@ -255,6 +258,7 @@ new #[Title('Edit Draft Sheet')] class extends Component
         $this->location = trim($this->location);
         $this->deadlineAt = trim($this->deadlineAt);
         $this->selectionMaximum = trim($this->selectionMaximum);
+        $this->participationPolicy = trim($this->participationPolicy);
     }
 
     /** @return array<string, array<int, string>> */
@@ -272,6 +276,7 @@ new #[Title('Edit Draft Sheet')] class extends Component
                 'min:1',
                 'max:'.$this->sheet->options()->count(),
             ],
+            'participationPolicy' => ['required', 'in:'.Sheet::PARTICIPATION_OPEN.','.Sheet::PARTICIPATION_VERIFIED],
         ];
     }
 
@@ -287,6 +292,7 @@ new #[Title('Edit Draft Sheet')] class extends Component
             'location' => $this->location === '' ? null : $this->location,
             'deadline_at' => Carbon::parse($this->deadlineAt, $this->sheet->timezone)->utc(),
             'selection_maximum' => $this->selectionMaximum === '' ? null : (int) $this->selectionMaximum,
+            'participation_policy' => $this->participationPolicy,
         ];
     }
 
@@ -370,6 +376,29 @@ new #[Title('Edit Draft Sheet')] class extends Component
                 <x-ui.input wire:model="selectionMaximum" :label="__('Selection maximum')" type="number" min="1" :description="__('Maximum Options each Signup may claim.')" />
             </div>
 
+            <fieldset class="grid gap-3">
+                <legend class="text-sm font-semibold text-stone-800 dark:text-stone-100">{{ __('Participation policy') }}</legend>
+                <div class="grid gap-3 sm:grid-cols-2">
+                    <label class="flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border border-stone-300 p-4 dark:border-stone-700">
+                        <input wire:model="participationPolicy" type="radio" name="participationPolicy" value="{{ Sheet::PARTICIPATION_OPEN }}" class="mt-0.5 size-5 border-stone-300 text-teal-700 focus:ring-teal-600 dark:border-stone-600 dark:bg-stone-900">
+                        <span>
+                            <span class="block font-semibold">{{ __('Open Participation') }}</span>
+                            <span class="mt-1 block text-sm text-stone-600 dark:text-stone-400">{{ __('Anyone may sign up; email is optional.') }}</span>
+                        </span>
+                    </label>
+                    <label class="flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border border-stone-300 p-4 dark:border-stone-700">
+                        <input wire:model="participationPolicy" type="radio" name="participationPolicy" value="{{ Sheet::PARTICIPATION_VERIFIED }}" class="mt-0.5 size-5 border-stone-300 text-teal-700 focus:ring-teal-600 dark:border-stone-600 dark:bg-stone-900">
+                        <span>
+                            <span class="block font-semibold">{{ __('Verified Participation') }}</span>
+                            <span class="mt-1 block text-sm text-stone-600 dark:text-stone-400">{{ __('A verified Account is required before capacity is reserved.') }}</span>
+                        </span>
+                    </label>
+                </div>
+                @error('participationPolicy')
+                    <p class="text-sm font-medium text-red-700 dark:text-red-400">{{ $message }}</p>
+                @enderror
+            </fieldset>
+
             <div>
                 <x-ui.button type="submit">{{ __('Save details') }}</x-ui.button>
             </div>
@@ -406,7 +435,11 @@ new #[Title('Edit Draft Sheet')] class extends Component
 
             <div>
                 <dt class="text-xs font-bold uppercase tracking-[0.16em] text-stone-500 dark:text-stone-400">{{ __('Participation') }}</dt>
-                <dd class="mt-1 font-semibold">{{ __('Open Participation') }}</dd>
+                <dd class="mt-1 font-semibold">
+                    {{ $sheet->participation_policy === Sheet::PARTICIPATION_VERIFIED
+                        ? __('Verified Participation')
+                        : __('Open Participation') }}
+                </dd>
             </div>
 
             <div>

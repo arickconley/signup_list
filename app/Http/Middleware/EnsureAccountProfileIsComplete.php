@@ -15,7 +15,7 @@ class EnsureAccountProfileIsComplete
     public function handle(Request $request, Closure $next): Response|RedirectResponse
     {
         if (! $request->user()->hasCompleteProfile()) {
-            return redirect()->route('profile.edit');
+            return redirect()->guest(route('profile.edit'));
         }
 
         return $next($request);

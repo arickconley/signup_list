@@ -57,7 +57,14 @@ class Sheet extends Model
 
     public const string PARTICIPATION_OPEN = 'open';
 
+    public const string PARTICIPATION_VERIFIED = 'verified';
+
     public const string VISIBILITY_OWNER_ONLY = 'owner_only';
+
+    /** @var array<string, mixed> */
+    protected $attributes = [
+        'participation_policy' => self::PARTICIPATION_OPEN,
+    ];
 
     protected static function booted(): void
     {
@@ -88,6 +95,13 @@ class Sheet extends Model
     {
         return $this->state === self::STATE_PUBLISHED
             && $this->participation_policy === self::PARTICIPATION_OPEN
+            && $this->deadline_at->isFuture();
+    }
+
+    public function isAcceptingVerifiedParticipationSignups(): bool
+    {
+        return $this->state === self::STATE_PUBLISHED
+            && $this->participation_policy === self::PARTICIPATION_VERIFIED
             && $this->deadline_at->isFuture();
     }
 

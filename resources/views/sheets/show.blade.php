@@ -145,6 +145,17 @@
 
                 @if ($isOpen && $sheet->participation_policy === \App\Models\Sheet::PARTICIPATION_OPEN)
                     <livewire:complete-open-signup :sheet-public-id="$sheet->public_id" />
+                @elseif ($isOpen && $sheet->participation_policy === \App\Models\Sheet::PARTICIPATION_VERIFIED)
+                    <section class="border-t-2 border-stone-800 px-5 py-8 sm:px-9 sm:py-11 dark:border-stone-200" aria-labelledby="verified-participation-title">
+                        <div class="max-w-3xl">
+                            <p class="font-mono text-xs font-bold uppercase tracking-[0.16em] text-teal-800 dark:text-teal-300">{{ __('Verified Participation') }}</p>
+                            <h2 id="verified-participation-title" class="mt-2 font-display text-3xl font-semibold tracking-tight sm:text-4xl">{{ __('Verify your email before choosing Options') }}</h2>
+                            <p class="mt-3 text-sm leading-6 text-stone-600 dark:text-stone-400">{{ __('A verified Account reserves capacity once per participant. Passwordless email access is available.') }}</p>
+                            <x-ui.link :href="route('sheets.participate', $sheet)" class="mt-6 inline-flex min-h-11 items-center rounded-lg bg-teal-700 px-5 py-3 font-bold text-white no-underline hover:bg-teal-800 dark:bg-teal-500 dark:text-stone-950 dark:hover:bg-teal-400">
+                                {{ __('Continue with verified email') }}
+                            </x-ui.link>
+                        </div>
+                    </section>
                 @endif
             </article>
 

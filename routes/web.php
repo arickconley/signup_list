@@ -3,6 +3,7 @@
 use App\Http\Controllers\AccountAccessController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ShowPublishedSheetController;
+use App\Http\Controllers\ShowVerifiedParticipationController;
 use App\Http\Middleware\PreventSearchIndexing;
 use Illuminate\Support\Facades\Route;
 
@@ -22,6 +23,11 @@ Route::middleware(['auth', 'verified', 'profile.complete'])->group(function () {
     Route::livewire('sheets/{sheet}/signups', 'pages::sheets.signups')
         ->middleware(PreventSearchIndexing::class)
         ->name('sheets.signups');
+    Route::get('sheets/{sheet:public_id}/participate', ShowVerifiedParticipationController::class)
+        ->name('sheets.participate')
+        ->missing(fn () => response()
+            ->view('sheets.unavailable', status: 404)
+            ->header('X-Robots-Tag', 'noindex, nofollow'));
 });
 
 Route::get('sheets/{sheet:public_id}', ShowPublishedSheetController::class)

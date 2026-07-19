@@ -78,6 +78,23 @@ test('Draft captures optional content and safe defaults in the Owner timezone', 
         ->assertSee('Owner only');
 });
 
+test('Owner can choose Verified Participation when creating a Draft Sheet', function () {
+    $account = Account::factory()->create();
+    $this->actingAs($account);
+
+    Livewire::test('pages::sheets.create')
+        ->assertSet('participationPolicy', Sheet::PARTICIPATION_OPEN)
+        ->assertSee('Open Participation')
+        ->assertSee('Verified Participation')
+        ->set('title', 'Verified volunteers')
+        ->set('participationPolicy', Sheet::PARTICIPATION_VERIFIED)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect($account->ownedSheets()->sole()->participation_policy)
+        ->toBe(Sheet::PARTICIPATION_VERIFIED);
+});
+
 test('eligible Account creates a UUID-addressed Draft visible on its dashboard', function () {
     $account = Account::factory()->create();
     $this->actingAs($account);

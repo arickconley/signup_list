@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Account;
+use App\Models\Sheet;
 use App\Support\DefaultSheetDeadline;
 use App\Support\OwnerEligibility;
 use Illuminate\Support\Carbon;
@@ -18,6 +19,8 @@ new #[Title('Create a signup sheet')] class extends Component
 
     public string $location = '';
 
+    public string $participationPolicy = Sheet::PARTICIPATION_OPEN;
+
     public function save(DefaultSheetDeadline $defaultDeadline, OwnerEligibility $eligibility): void
     {
         $this->title = trim($this->title);
@@ -30,6 +33,7 @@ new #[Title('Create a signup sheet')] class extends Component
             'description' => ['nullable', 'string', 'max:5000'],
             'eventAt' => ['nullable', 'date_format:Y-m-d\TH:i'],
             'location' => ['nullable', 'string', 'max:255'],
+            'participationPolicy' => ['required', 'in:'.Sheet::PARTICIPATION_OPEN.','.Sheet::PARTICIPATION_VERIFIED],
         ]);
 
         $account = Auth::user();
@@ -49,6 +53,7 @@ new #[Title('Create a signup sheet')] class extends Component
                 ? null
                 : Carbon::parse($this->eventAt, $account->timezone)->utc(),
             'location' => $this->location === '' ? null : $this->location,
+            'participation_policy' => $this->participationPolicy,
             'deadline_at' => $defaultDeadline->forTimezone($account->timezone),
             'timezone' => $account->timezone,
         ]);
@@ -91,6 +96,29 @@ new #[Title('Create a signup sheet')] class extends Component
                 <x-ui.input wire:model="eventAt" :label="__('Event date and time')" type="datetime-local" :description="__('Optional. Uses your profile timezone.')" />
                 <x-ui.input wire:model="location" :label="__('Location')" type="text" :description="__('Optional.')" />
             </div>
+
+            <fieldset class="grid gap-3">
+                <legend class="text-sm font-semibold text-stone-800 dark:text-stone-100">{{ __('Participation policy') }}</legend>
+                <div class="grid gap-3 sm:grid-cols-2">
+                    <label class="flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border border-stone-300 p-4 dark:border-stone-700">
+                        <input wire:model="participationPolicy" type="radio" name="participationPolicy" value="{{ Sheet::PARTICIPATION_OPEN }}" class="mt-0.5 size-5 border-stone-300 text-teal-700 focus:ring-teal-600 dark:border-stone-600 dark:bg-stone-900">
+                        <span>
+                            <span class="block font-semibold">{{ __('Open Participation') }}</span>
+                            <span class="mt-1 block text-sm text-stone-600 dark:text-stone-400">{{ __('Anyone may sign up; email is optional.') }}</span>
+                        </span>
+                    </label>
+                    <label class="flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border border-stone-300 p-4 dark:border-stone-700">
+                        <input wire:model="participationPolicy" type="radio" name="participationPolicy" value="{{ Sheet::PARTICIPATION_VERIFIED }}" class="mt-0.5 size-5 border-stone-300 text-teal-700 focus:ring-teal-600 dark:border-stone-600 dark:bg-stone-900">
+                        <span>
+                            <span class="block font-semibold">{{ __('Verified Participation') }}</span>
+                            <span class="mt-1 block text-sm text-stone-600 dark:text-stone-400">{{ __('A verified Account is required before capacity is reserved.') }}</span>
+                        </span>
+                    </label>
+                </div>
+                @error('participationPolicy')
+                    <p class="text-sm font-medium text-red-700 dark:text-red-400">{{ $message }}</p>
+                @enderror
+            </fieldset>
 
             <div class="flex justify-end">
                 <x-ui.button type="submit">{{ __('Create Draft Sheet') }}</x-ui.button>
