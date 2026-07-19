@@ -122,6 +122,54 @@ test('Verified Account completes one capacity-bearing Signup', function () {
         ->and($option->refresh()->claimed_count)->toBe(1);
 });
 
+test('future verified Account Signup persists only consent for participant-visible fields', function () {
+    $account = Account::factory()->create([
+        'name' => 'Changed Account Default',
+        'email' => 'verified-privacy@example.test',
+        'phone' => '555-9999',
+    ]);
+    $sheet = Sheet::factory()->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_VERIFIED,
+        'selection_maximum' => 1,
+        'name_visibility' => Sheet::VISIBILITY_PARTICIPANTS,
+        'email_visibility' => Sheet::VISIBILITY_OWNER_ONLY,
+        'phone_visibility' => Sheet::VISIBILITY_PARTICIPANTS,
+    ]);
+    $option = $sheet->options()->create([
+        'name' => 'Verified privacy Option',
+        'capacity' => 1,
+        'position' => 1,
+    ]);
+
+    Livewire::actingAs($account)
+        ->test('complete-verified-signup', ['sheetPublicId' => $sheet->public_id])
+        ->assertSee('Visibility Consent')
+        ->assertSee('Share full name')
+        ->assertDontSee('Share email')
+        ->assertSee('Share phone')
+        ->set('name', 'Verified Signup Snapshot')
+        ->set('phone', '555-0124')
+        ->set('nameConsent', true)
+        ->set('emailConsent', true)
+        ->set('phoneConsent', true)
+        ->set('selectedOptions', [$option->public_id])
+        ->call('complete')
+        ->assertHasNoErrors();
+
+    expect(Signup::query()->sole())
+        ->name_consent->toBeTrue()
+        ->email_consent->toBeFalse()
+        ->phone_consent->toBeTrue();
+
+    $this->get(route('sheets.show', $sheet))
+        ->assertOk()
+        ->assertSee('Verified Signup Snapshot')
+        ->assertSee('555-0124')
+        ->assertDontSee('Changed Account Default')
+        ->assertDontSee('555-9999');
+});
+
 test('Verified Signup attempts are throttled independently per Sheet and Account', function () {
     $account = Account::factory()->create([
         'name' => 'Limited Participant',

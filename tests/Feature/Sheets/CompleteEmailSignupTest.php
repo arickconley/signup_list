@@ -112,6 +112,50 @@ test('participant supplies email and completes a Signup with Pending Account Ass
         ->and(Hash::check($magicLinkSegments[3] ?? '', $challenge->token_hash))->toBeTrue();
 });
 
+test('future pending Signup persists explicit consent independently', function () {
+    Mail::fake();
+
+    $sheet = Sheet::factory()->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_OPEN,
+        'selection_maximum' => 1,
+        'name_visibility' => Sheet::VISIBILITY_PARTICIPANTS,
+        'email_visibility' => Sheet::VISIBILITY_PARTICIPANTS,
+        'phone_visibility' => Sheet::VISIBILITY_PARTICIPANTS,
+    ]);
+    $option = $sheet->options()->create([
+        'name' => 'Pending privacy Option',
+        'capacity' => 1,
+        'position' => 1,
+    ]);
+
+    Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
+        ->set('name', 'Xylophone Zephyr')
+        ->set('email', 'pending-privacy@example.test')
+        ->set('phone', '555-0196')
+        ->set('nameConsent', false)
+        ->set('emailConsent', true)
+        ->set('phoneConsent', false)
+        ->set('selectedOptions', [$option->public_id])
+        ->call('complete')
+        ->assertHasNoErrors();
+
+    $signup = Signup::query()->with('pendingAccountAssociation')->sole();
+
+    expect($signup)
+        ->name_consent->toBeFalse()
+        ->email_consent->toBeTrue()
+        ->phone_consent->toBeFalse()
+        ->and($signup->pendingAccountAssociation)->not->toBeNull();
+
+    $this->get(route('sheets.show', $sheet))
+        ->assertOk()
+        ->assertSee('XZ')
+        ->assertSee('pending-privacy@example.test')
+        ->assertDontSee('Xylophone Zephyr')
+        ->assertDontSee('555-0196');
+});
+
 test('duplicate normalized email is neutral and changes no Signup capacity', function () {
     Mail::fake();
 

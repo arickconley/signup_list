@@ -115,6 +115,12 @@ final class CompleteVerifiedSignup
             'name_snapshot' => $name,
             'email_snapshot' => $accountEmail,
             'phone_snapshot' => $phone,
+            'name_consent' => $sheet->name_visibility === Sheet::VISIBILITY_PARTICIPANTS
+                && $input->nameConsent,
+            'email_consent' => $sheet->email_visibility === Sheet::VISIBILITY_PARTICIPANTS
+                && $input->emailConsent,
+            'phone_consent' => $sheet->phone_visibility === Sheet::VISIBILITY_PARTICIPANTS
+                && $input->phoneConsent,
         ]);
         $signup->sheet()->associate($sheet);
         $signup->account()->associate($account);

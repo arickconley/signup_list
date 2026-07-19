@@ -138,6 +138,37 @@
                                         </div>
                                     </dl>
                                 </article>
+
+                                @php
+                                    $publicClaims = $option->optionClaims->filter(function ($claim) use ($sheet) {
+                                        $signup = $claim->signup;
+
+                                        return $sheet->name_visibility === \App\Models\Sheet::VISIBILITY_PARTICIPANTS
+                                            || ($sheet->email_visibility === \App\Models\Sheet::VISIBILITY_PARTICIPANTS && $signup->email_consent && filled($signup->email_snapshot))
+                                            || ($sheet->phone_visibility === \App\Models\Sheet::VISIBILITY_PARTICIPANTS && $signup->phone_consent && filled($signup->phone_snapshot));
+                                    });
+                                @endphp
+                                @if ($publicClaims->isNotEmpty())
+                                    <section class="border-t border-stone-300 py-5 dark:border-stone-700" aria-label="{{ __('Participants for :option', ['option' => $option->name]) }}">
+                                        <h4 class="text-xs font-bold uppercase tracking-[0.14em] text-stone-500 dark:text-stone-400">{{ __('Participants') }}</h4>
+                                        <ul class="mt-3 grid gap-3 sm:grid-cols-2">
+                                            @foreach ($publicClaims as $claim)
+                                                @php($signup = $claim->signup)
+                                                <li class="border-s-2 border-teal-700 ps-3 dark:border-teal-400">
+                                                    @if ($sheet->name_visibility === \App\Models\Sheet::VISIBILITY_PARTICIPANTS)
+                                                        <p class="font-semibold">{{ $signup->name_consent ? $signup->name_snapshot : $signup->initials() }}</p>
+                                                    @endif
+                                                    @if ($sheet->email_visibility === \App\Models\Sheet::VISIBILITY_PARTICIPANTS && $signup->email_consent && filled($signup->email_snapshot))
+                                                        <p class="mt-1 break-words text-sm text-stone-600 dark:text-stone-400">{{ $signup->email_snapshot }}</p>
+                                                    @endif
+                                                    @if ($sheet->phone_visibility === \App\Models\Sheet::VISIBILITY_PARTICIPANTS && $signup->phone_consent && filled($signup->phone_snapshot))
+                                                        <p class="mt-1 break-words text-sm text-stone-600 dark:text-stone-400">{{ $signup->phone_snapshot }}</p>
+                                                    @endif
+                                                </li>
+                                            @endforeach
+                                        </ul>
+                                    </section>
+                                @endif
                             </li>
                         @endforeach
                     </ol>

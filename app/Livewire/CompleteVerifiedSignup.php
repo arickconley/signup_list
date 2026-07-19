@@ -28,6 +28,12 @@ class CompleteVerifiedSignup extends Component
 
     public string $phone = '';
 
+    public bool $nameConsent = false;
+
+    public bool $emailConsent = false;
+
+    public bool $phoneConsent = false;
+
     /** @var array<int, string> */
     public array $selectedOptions = [];
 
@@ -107,6 +113,9 @@ class CompleteVerifiedSignup extends Component
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
+            'nameConsent' => ['boolean'],
+            'emailConsent' => ['boolean'],
+            'phoneConsent' => ['boolean'],
             'selectedOptions' => ['required', 'array', 'min:1', 'max:'.$selectionMaximum],
             'selectedOptions.*' => ['required', 'uuid', 'distinct'],
         ], [
@@ -135,6 +144,9 @@ class CompleteVerifiedSignup extends Component
                 optionPublicIds: $this->selectedOptions,
                 email: $this->email,
                 ipAddress: request()->ip() ?? 'unknown',
+                nameConsent: $this->nameConsent,
+                emailConsent: $this->emailConsent,
+                phoneConsent: $this->phoneConsent,
             ));
         } catch (CannotCompleteSignup $exception) {
             $this->unavailableOptionNames = $exception->unavailableOptionNames;
@@ -164,6 +176,9 @@ class CompleteVerifiedSignup extends Component
                 ->orderBy('position')
                 ->get(['public_id', 'name']),
             'selectionMaximum' => $sheet->selection_maximum,
+            'showsNameConsent' => $sheet->name_visibility === Sheet::VISIBILITY_PARTICIPANTS,
+            'showsEmailConsent' => $sheet->email_visibility === Sheet::VISIBILITY_PARTICIPANTS,
+            'showsPhoneConsent' => $sheet->phone_visibility === Sheet::VISIBILITY_PARTICIPANTS,
         ]);
     }
 }

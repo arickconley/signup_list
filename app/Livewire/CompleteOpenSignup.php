@@ -23,6 +23,12 @@ class CompleteOpenSignup extends Component
 
     public string $email = '';
 
+    public bool $nameConsent = false;
+
+    public bool $emailConsent = false;
+
+    public bool $phoneConsent = false;
+
     /** @var array<int, string> */
     public array $selectedOptions = [];
 
@@ -58,7 +64,16 @@ class CompleteOpenSignup extends Component
         $this->announcement = '';
 
         if (trim($this->website) !== '') {
-            $this->reset('name', 'email', 'phone', 'selectedOptions', 'website');
+            $this->reset(
+                'name',
+                'email',
+                'phone',
+                'nameConsent',
+                'emailConsent',
+                'phoneConsent',
+                'selectedOptions',
+                'website',
+            );
 
             return;
         }
@@ -72,6 +87,9 @@ class CompleteOpenSignup extends Component
             'name' => ['required', 'string', 'max:255'],
             'email' => ['nullable', 'string', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
+            'nameConsent' => ['boolean'],
+            'emailConsent' => ['boolean'],
+            'phoneConsent' => ['boolean'],
             'selectedOptions' => ['required', 'array', 'min:1', 'max:'.$selectionMaximum],
             'selectedOptions.*' => ['required', 'uuid', 'distinct'],
         ], [
@@ -100,6 +118,9 @@ class CompleteOpenSignup extends Component
                 optionPublicIds: $this->selectedOptions,
                 email: $this->email === '' ? null : $this->email,
                 ipAddress: request()->ip() ?? 'unknown',
+                nameConsent: $this->nameConsent,
+                emailConsent: $this->emailConsent,
+                phoneConsent: $this->phoneConsent,
             ));
         } catch (CannotCompleteSignup $exception) {
             $this->unavailableOptionNames = $exception->unavailableOptionNames;
@@ -145,6 +166,9 @@ class CompleteOpenSignup extends Component
             'selectionMaximum' => $sheet->selection_maximum,
             'acceptingSignups' => $acceptingSignups,
             'hasAvailableOptions' => $availableOptions->isNotEmpty(),
+            'showsNameConsent' => $sheet->name_visibility === Sheet::VISIBILITY_PARTICIPANTS,
+            'showsEmailConsent' => $sheet->email_visibility === Sheet::VISIBILITY_PARTICIPANTS,
+            'showsPhoneConsent' => $sheet->phone_visibility === Sheet::VISIBILITY_PARTICIPANTS,
         ]);
     }
 }

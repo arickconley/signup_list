@@ -197,6 +197,72 @@ test('participant saves editable details consent and Option Claims while email i
         ->and($replacement->refresh()->claimed_count)->toBe(1);
 });
 
+test('existing Account participant opts into broadened visibility using only Signup snapshots', function () {
+    $account = Account::factory()->create([
+        'name' => 'Original Account Name',
+        'email' => 'submitted-account@example.test',
+        'phone' => '555-0100',
+    ]);
+    $signup = issue14ParticipantUiSignup($account);
+    $signup->update([
+        'name_snapshot' => 'Private Signup Snapshot',
+        'phone_snapshot' => '555-0138',
+        'name_consent' => false,
+        'email_consent' => false,
+        'phone_consent' => false,
+    ]);
+    $option = $signup->sheet->options()->create([
+        'name' => 'Existing privacy Option',
+        'capacity' => 1,
+        'claimed_count' => 1,
+        'position' => 1,
+    ]);
+    $signup->optionClaims()->create(['option_id' => $option->id]);
+    $account->forceFill([
+        'name' => 'Changed Account Name',
+        'email' => 'changed-account@example.test',
+        'phone' => '555-9999',
+    ])->save();
+    $signup->sheet->update([
+        'name_visibility' => Sheet::VISIBILITY_PARTICIPANTS,
+        'email_visibility' => Sheet::VISIBILITY_PARTICIPANTS,
+        'phone_visibility' => Sheet::VISIBILITY_PARTICIPANTS,
+    ]);
+
+    $this->get(route('sheets.show', $signup->sheet))
+        ->assertOk()
+        ->assertSee('PSS')
+        ->assertDontSee('Private Signup Snapshot')
+        ->assertDontSee('submitted-account@example.test')
+        ->assertDontSee('555-0138')
+        ->assertDontSee('Changed Account Name')
+        ->assertDontSee('changed-account@example.test')
+        ->assertDontSee('555-9999');
+
+    Livewire::actingAs($account)
+        ->test('pages::signups.edit', ['signup' => $signup])
+        ->assertSet('name', 'Private Signup Snapshot')
+        ->assertSet('email', 'submitted-account@example.test')
+        ->assertSet('phone', '555-0138')
+        ->assertSee('Share full name')
+        ->assertSee('Share email')
+        ->assertSee('Share phone')
+        ->set('nameConsent', true)
+        ->set('emailConsent', true)
+        ->set('phoneConsent', true)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $this->get(route('sheets.show', $signup->sheet))
+        ->assertOk()
+        ->assertSee('Private Signup Snapshot')
+        ->assertSee('submitted-account@example.test')
+        ->assertSee('555-0138')
+        ->assertDontSee('Changed Account Name')
+        ->assertDontSee('changed-account@example.test')
+        ->assertDontSee('555-9999');
+});
+
 test('recoverable validation errors are summarized inline without losing participant input', function () {
     $account = Account::factory()->create();
     $signup = issue14ParticipantUiSignup($account);

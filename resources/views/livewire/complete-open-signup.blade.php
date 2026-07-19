@@ -58,6 +58,24 @@
             <x-ui.input wire:model="phone" name="phone" :label="__('Phone')" type="tel" autocomplete="tel" :description="__('Optional.')" />
         </div>
 
+        @if ($showsNameConsent || $showsEmailConsent || $showsPhoneConsent)
+            <fieldset class="grid gap-4">
+                <legend class="font-display text-2xl font-semibold">{{ __('Visibility Consent') }}</legend>
+                <p class="text-sm leading-6 text-stone-600 dark:text-stone-400">{{ __('The Owner always sees submitted details. Public display also depends on the Signup Sheet settings.') }}</p>
+                <div class="grid gap-3 sm:grid-cols-3">
+                    @if ($showsNameConsent)
+                        <x-ui.checkbox wire:model="nameConsent" id="signup-name-consent" name="nameConsent" :label="__('Share full name')" variant="card" />
+                    @endif
+                    @if ($showsEmailConsent)
+                        <x-ui.checkbox wire:model="emailConsent" id="signup-email-consent" name="emailConsent" :label="__('Share email')" variant="card" />
+                    @endif
+                    @if ($showsPhoneConsent)
+                        <x-ui.checkbox wire:model="phoneConsent" id="signup-phone-consent" name="phoneConsent" :label="__('Share phone')" variant="card" />
+                    @endif
+                </div>
+            </fieldset>
+        @endif
+
         <fieldset class="grid gap-3" @if ($errors->has('selectedOptions') || $errors->has('signup')) aria-invalid="true" aria-describedby="signup-options-error" @endif>
             <legend class="text-sm font-semibold text-stone-800 dark:text-stone-100">{{ __('Available Options') }}</legend>
             <div class="grid gap-3 sm:grid-cols-2">

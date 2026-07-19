@@ -20,8 +20,9 @@ class ShowPublishedSheetController extends Controller
                 'sheet' => $sheet,
                 'isOpen' => $sheet->deadline_at->isFuture(),
                 'options' => $sheet->options()
+                    ->with('optionClaims.signup')
                     ->orderBy('position')
-                    ->get(['name', 'description', 'capacity', 'claimed_count', 'position']),
+                    ->get(['id', 'name', 'description', 'capacity', 'claimed_count', 'position']),
             ])
             ->header('X-Robots-Tag', 'noindex, nofollow');
     }

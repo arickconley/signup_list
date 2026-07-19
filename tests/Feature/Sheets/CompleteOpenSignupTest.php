@@ -129,6 +129,100 @@ test('Unregistered Participant completes a Signup without creating an Account', 
         ->assertSeeInOrder(['Welcome table', 'Claimed', '1', 'Remaining', '1']);
 });
 
+test('future Unregistered Signup persists only consent for participant-visible fields', function () {
+    $sheet = Sheet::factory()->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_OPEN,
+        'selection_maximum' => 1,
+        'name_visibility' => Sheet::VISIBILITY_PARTICIPANTS,
+        'email_visibility' => Sheet::VISIBILITY_OWNER_ONLY,
+        'phone_visibility' => Sheet::VISIBILITY_PARTICIPANTS,
+    ]);
+    $option = $sheet->options()->create([
+        'name' => 'Future privacy Option',
+        'capacity' => 1,
+        'position' => 1,
+    ]);
+
+    Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
+        ->set('name', 'Future Unregistered Person')
+        ->set('phone', '555-0172')
+        ->set('nameConsent', true)
+        ->set('emailConsent', true)
+        ->set('phoneConsent', true)
+        ->set('selectedOptions', [$option->public_id])
+        ->call('complete')
+        ->assertHasNoErrors()
+        ->assertSee('Signup complete');
+
+    expect(Signup::query()->sole())
+        ->name_consent->toBeTrue()
+        ->email_consent->toBeFalse()
+        ->phone_consent->toBeTrue();
+
+    $this->get(route('sheets.show', $sheet))
+        ->assertOk()
+        ->assertSee('Future Unregistered Person')
+        ->assertSee('555-0172');
+});
+
+test('existing Unregistered Participant stays private after eligibility broadens', function () {
+    $sheet = Sheet::factory()->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_OPEN,
+        'selection_maximum' => 1,
+        'name_visibility' => Sheet::VISIBILITY_OWNER_ONLY,
+        'email_visibility' => Sheet::VISIBILITY_OWNER_ONLY,
+        'phone_visibility' => Sheet::VISIBILITY_OWNER_ONLY,
+    ]);
+    $option = $sheet->options()->create([
+        'name' => 'Existing private Option',
+        'capacity' => 1,
+        'position' => 1,
+    ]);
+
+    Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
+        ->assertDontSee('Visibility Consent')
+        ->set('name', 'Existing Unregistered Person')
+        ->set('phone', '555-0157')
+        ->set('nameConsent', true)
+        ->set('emailConsent', true)
+        ->set('phoneConsent', true)
+        ->set('selectedOptions', [$option->public_id])
+        ->call('complete')
+        ->assertHasNoErrors();
+
+    $signup = Signup::query()->with('pendingAccountAssociation')->sole();
+
+    expect($signup)
+        ->account_id->toBeNull()
+        ->name_consent->toBeFalse()
+        ->email_consent->toBeFalse()
+        ->phone_consent->toBeFalse()
+        ->and($signup->pendingAccountAssociation)->toBeNull();
+
+    $sheet->update([
+        'name_visibility' => Sheet::VISIBILITY_PARTICIPANTS,
+        'email_visibility' => Sheet::VISIBILITY_PARTICIPANTS,
+        'phone_visibility' => Sheet::VISIBILITY_PARTICIPANTS,
+    ]);
+
+    $this->get(route('sheets.show', $sheet))
+        ->assertOk()
+        ->assertSee('EUP')
+        ->assertDontSee('Existing Unregistered Person')
+        ->assertDontSee('555-0157');
+
+    $this->actingAs($sheet->owner)
+        ->get(route('sheets.signups', $sheet))
+        ->assertOk()
+        ->assertSee('Existing Unregistered Person')
+        ->assertSee('555-0157');
+
+    $this->get(route('signups.edit', $signup))
+        ->assertNotFound();
+});
+
 test('Open Participation accepts every Option up to a configured maximum above 100', function () {
     $sheet = Sheet::factory()->create([
         'state' => Sheet::STATE_PUBLISHED,

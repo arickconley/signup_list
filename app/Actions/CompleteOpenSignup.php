@@ -46,6 +46,9 @@ class CompleteOpenSignup
                     $input->phone,
                     $input->optionPublicIds,
                     $normalizedEmail,
+                    $input->nameConsent,
+                    $input->emailConsent,
+                    $input->phoneConsent,
                 ),
             );
         } catch (CannotCompleteSignup $exception) {
@@ -144,6 +147,9 @@ class CompleteOpenSignup
         ?string $phone,
         array $optionPublicIds,
         ?string $email,
+        bool $nameConsent,
+        bool $emailConsent,
+        bool $phoneConsent,
     ): array {
         $sheet = Sheet::query()->where('public_id', $sheetPublicId)->first();
 
@@ -158,7 +164,7 @@ class CompleteOpenSignup
             $target = $this->replaceSignupClaims->forNewSignup(
                 $sheet,
                 $optionPublicIds,
-                function () use ($sheet, $name, $phone, $email): SignupClaimTarget {
+                function () use ($sheet, $name, $phone, $email, $nameConsent, $emailConsent, $phoneConsent): SignupClaimTarget {
                     if ($email !== null) {
                         $existingSignup = Signup::query()
                             ->where('sheet_id', $sheet->id)
@@ -196,6 +202,12 @@ class CompleteOpenSignup
                         'name_snapshot' => $signupName,
                         'email_snapshot' => $signupEmail,
                         'phone_snapshot' => $signupPhone,
+                        'name_consent' => $sheet->name_visibility === Sheet::VISIBILITY_PARTICIPANTS
+                            && $nameConsent,
+                        'email_consent' => $sheet->email_visibility === Sheet::VISIBILITY_PARTICIPANTS
+                            && $emailConsent,
+                        'phone_consent' => $sheet->phone_visibility === Sheet::VISIBILITY_PARTICIPANTS
+                            && $phoneConsent,
                     ]);
 
                     if ($account !== null) {

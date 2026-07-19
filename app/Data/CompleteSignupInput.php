@@ -14,5 +14,8 @@ final readonly class CompleteSignupInput
         public array $optionPublicIds,
         public ?string $email = null,
         public string $ipAddress = 'unknown',
+        public bool $nameConsent = false,
+        public bool $emailConsent = false,
+        public bool $phoneConsent = false,
     ) {}
 }

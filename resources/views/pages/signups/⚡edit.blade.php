@@ -52,7 +52,7 @@ new #[Title('Edit Signup')] class extends Component
         $this->signup = $signup;
         $account = $this->authorizeParticipant();
 
-        $this->email = $account->email;
+        $this->email = $signup->email_snapshot ?? '';
         $this->name = $signup->name_snapshot;
         $this->phone = $signup->phone_snapshot ?? '';
         $this->nameConsent = $signup->name_consent;
@@ -221,11 +221,11 @@ new #[Title('Edit Signup')] class extends Component
                             id="participant-email"
                             wire:model="email"
                             name="email"
-                            :label="__('Account email')"
+                            :label="__('Signup email')"
                             type="email"
                             readonly
                             aria-readonly="true"
-                            :description="__('Email identifies the Account associated with this Signup and cannot be changed here.')"
+                            :description="__('Email submitted with this Signup cannot be changed here.')"
                         />
                     </div>
                 </div>

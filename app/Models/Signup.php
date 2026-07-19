@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 /**
  * @property int $id
@@ -72,6 +73,17 @@ class Signup extends Model
     public function canBeCancelledBy(Account $account): bool
     {
         return $this->canBeEditedBy($account);
+    }
+
+    public function initials(): string
+    {
+        $initials = '';
+
+        foreach (preg_split('/\s+/u', trim($this->name_snapshot)) ?: [] as $namePart) {
+            $initials .= Str::upper(Str::substr($namePart, 0, 1));
+        }
+
+        return $initials;
     }
 
     /** @return array<string, string> */
