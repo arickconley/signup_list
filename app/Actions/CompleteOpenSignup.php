@@ -4,11 +4,12 @@ namespace App\Actions;
 
 use App\Data\CompleteSignupInput;
 use App\Data\CompleteSignupResult;
+use App\Data\SignupClaimTarget;
+use App\Exceptions\CannotChangeSignupClaims;
 use App\Exceptions\CannotCompleteSignup;
 use App\Exceptions\ImmediateTransactionBusy;
 use App\Mail\SignupConfirmationMail;
 use App\Models\Account;
-use App\Models\Option;
 use App\Models\OptionClaim;
 use App\Models\Sheet;
 use App\Models\Signup;
@@ -22,6 +23,7 @@ class CompleteOpenSignup
 {
     public function __construct(
         private readonly ImmediateDatabaseTransaction $immediateTransaction,
+        private readonly ReplaceSignupClaims $replaceSignupClaims,
         private readonly IssueAccountAccessChallenge $issueAccountAccessChallenge,
         private readonly AccountAccessAbuseControl $abuseControl,
     ) {}
@@ -152,97 +154,66 @@ class CompleteOpenSignup
             throw new CannotCompleteSignup('This Signup Sheet is no longer open for signups.');
         }
 
-        $selectionMaximum = $sheet->selection_maximum;
-        $uniqueOptionPublicIds = array_values(array_unique($optionPublicIds));
+        try {
+            $target = $this->replaceSignupClaims->forNewSignup(
+                $sheet,
+                $optionPublicIds,
+                function () use ($sheet, $name, $phone, $email): SignupClaimTarget {
+                    if ($email !== null) {
+                        $existingSignup = Signup::query()
+                            ->where('sheet_id', $sheet->id)
+                            ->where('email_snapshot', $email)
+                            ->first();
 
-        if (
-            $selectionMaximum === null
-            || count($uniqueOptionPublicIds) !== count($optionPublicIds)
-            || count($optionPublicIds) < 1
-            || count($optionPublicIds) > $selectionMaximum
-        ) {
+                        if ($existingSignup !== null) {
+                            return new SignupClaimTarget($existingSignup, alreadyComplete: true);
+                        }
+                    }
+
+                    $signupName = $name;
+                    $signupEmail = $email;
+                    $signupPhone = $phone;
+                    $account = null;
+
+                    if ($email !== null) {
+                        $account = Account::query()->firstOrCreate(
+                            ['email' => $email],
+                            [
+                                'name' => $name,
+                                'phone' => $phone,
+                                'password' => null,
+                                'timezone' => null,
+                            ],
+                        );
+
+                        $accountDefaults = $account->accountDefaults();
+                        $signupName = filled($accountDefaults->name) ? $accountDefaults->name : $name;
+                        $signupEmail = filled($accountDefaults->email) ? $accountDefaults->email : $email;
+                        $signupPhone = filled($accountDefaults->phone) ? $accountDefaults->phone : $phone;
+                    }
+
+                    $signup = $sheet->signups()->create([
+                        'name_snapshot' => $signupName,
+                        'email_snapshot' => $signupEmail,
+                        'phone_snapshot' => $signupPhone,
+                    ]);
+
+                    if ($account !== null) {
+                        $signup->pendingAccountAssociation()->create(['account_id' => $account->id]);
+                    }
+
+                    return new SignupClaimTarget($signup, alreadyComplete: false);
+                },
+            );
+        } catch (CannotChangeSignupClaims $exception) {
             throw new CannotCompleteSignup(
-                "Choose between 1 and {$selectionMaximum} available Options.",
+                $exception->getMessage(),
+                $exception->unavailableOptionNames,
+                $exception->unavailableOptionPublicIds,
+                $exception,
             );
         }
 
-        $options = Option::query()
-            ->where('sheet_id', $sheet->id)
-            ->whereIn('public_id', $optionPublicIds)
-            ->orderBy('id')
-            ->get();
-
-        if ($options->count() !== count($optionPublicIds)) {
-            throw new CannotCompleteSignup('One or more selected Options do not belong to this Signup Sheet.');
-        }
-
-        $unavailableOptions = $options->filter(
-            fn (Option $option): bool => $option->claimed_count >= $option->capacity,
-        );
-
-        if ($unavailableOptions->isNotEmpty()) {
-            throw new CannotCompleteSignup(
-                'Some selected Options just became unavailable. Choose another Option and try again.',
-                $unavailableOptions->pluck('name')->all(),
-                $unavailableOptions->pluck('public_id')->all(),
-            );
-        }
-
-        if ($email !== null) {
-            $existingSignup = Signup::query()
-                ->where('sheet_id', $sheet->id)
-                ->where('email_snapshot', $email)
-                ->first();
-
-            if ($existingSignup !== null) {
-                return ['signup' => $existingSignup, 'duplicate' => true];
-            }
-        }
-
-        if ($email !== null) {
-            $account = Account::query()->firstOrCreate(
-                ['email' => $email],
-                [
-                    'name' => $name,
-                    'phone' => $phone,
-                    'password' => null,
-                    'timezone' => null,
-                ],
-            );
-
-            $accountDefaults = $account->accountDefaults();
-            $name = filled($accountDefaults->name) ? $accountDefaults->name : $name;
-            $email = filled($accountDefaults->email) ? $accountDefaults->email : $email;
-            $phone = filled($accountDefaults->phone) ? $accountDefaults->phone : $phone;
-        }
-
-        $signup = $sheet->signups()->create([
-            'name_snapshot' => $name,
-            'email_snapshot' => $email,
-            'phone_snapshot' => $phone,
-        ]);
-
-        if (isset($account)) {
-            $signup->pendingAccountAssociation()->create(['account_id' => $account->id]);
-        }
-
-        foreach ($options as $option) {
-            $updated = Option::query()
-                ->whereKey($option->id)
-                ->whereColumn('claimed_count', '<', 'capacity')
-                ->increment('claimed_count');
-
-            if ($updated !== 1) {
-                throw new CannotCompleteSignup(
-                    'Some selected Options just became unavailable. Choose another Option and try again.',
-                    [$option->name],
-                    [$option->public_id],
-                );
-            }
-
-            $signup->optionClaims()->create(['option_id' => $option->id]);
-        }
-
-        return ['signup' => $signup, 'duplicate' => false];
+        return ['signup' => $target->signup, 'duplicate' => $target->alreadyComplete];
     }
 }

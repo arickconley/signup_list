@@ -105,6 +105,16 @@ class Sheet extends Model
             && $this->deadline_at->isFuture();
     }
 
+    public function isAcceptingParticipantEdits(): bool
+    {
+        return $this->state === self::STATE_PUBLISHED
+            && in_array($this->participation_policy, [
+                self::PARTICIPATION_OPEN,
+                self::PARTICIPATION_VERIFIED,
+            ], true)
+            && $this->deadline_at->isFuture();
+    }
+
     public function getRouteKeyName(): string
     {
         return 'public_id';

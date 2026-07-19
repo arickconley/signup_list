@@ -58,13 +58,15 @@ class Signup extends Model
 
     public function canBeEditedBy(Account $account): bool
     {
-        if ($this->account_id !== $account->id || $this->pendingAccountAssociation()->exists()) {
+        if (
+            ! $account->hasVerifiedEmail()
+            || $this->account_id !== $account->id
+            || $this->pendingAccountAssociation()->exists()
+        ) {
             return false;
         }
 
-        $sheet = $this->sheet;
-
-        return $sheet->state === Sheet::STATE_PUBLISHED && $sheet->deadline_at->isFuture();
+        return $this->sheet->isAcceptingParticipantEdits();
     }
 
     public function canBeCancelledBy(Account $account): bool
