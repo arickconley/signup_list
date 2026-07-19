@@ -10,7 +10,7 @@ use Illuminate\Validation\Validator;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
-new #[Title('Edit Draft Sheet')] class extends Component
+new #[Title('Edit Signup Sheet')] class extends Component
 {
     public Sheet $sheet;
 
@@ -27,6 +27,12 @@ new #[Title('Edit Draft Sheet')] class extends Component
     public string $selectionMaximum = '';
 
     public string $participationPolicy = Sheet::PARTICIPATION_OPEN;
+
+    public string $nameVisibility = Sheet::VISIBILITY_OWNER_ONLY;
+
+    public string $emailVisibility = Sheet::VISIBILITY_OWNER_ONLY;
+
+    public string $phoneVisibility = Sheet::VISIBILITY_OWNER_ONLY;
 
     public string $announcement = '';
 
@@ -47,6 +53,7 @@ new #[Title('Edit Draft Sheet')] class extends Component
     public function mount(Sheet $sheet): void
     {
         abort_unless($sheet->owner_id === Auth::id(), 404);
+        $sheet->refresh();
 
         $this->sheet = $sheet;
         $this->title = $sheet->title;
@@ -58,6 +65,9 @@ new #[Title('Edit Draft Sheet')] class extends Component
             ? ''
             : (string) $sheet->selection_maximum;
         $this->participationPolicy = $sheet->participation_policy;
+        $this->nameVisibility = $sheet->name_visibility ?? Sheet::VISIBILITY_OWNER_ONLY;
+        $this->emailVisibility = $sheet->email_visibility ?? Sheet::VISIBILITY_OWNER_ONLY;
+        $this->phoneVisibility = $sheet->phone_visibility ?? Sheet::VISIBILITY_OWNER_ONLY;
     }
 
     public function hydrate(): void
@@ -73,8 +83,12 @@ new #[Title('Edit Draft Sheet')] class extends Component
         $this->sheet->update($this->detailAttributes());
         $this->sheet->refresh();
 
-        session()->flash('success', __('Draft details saved.'));
-        $this->announcement = __('Draft details saved.');
+        $message = $this->sheet->state === Sheet::STATE_PUBLISHED
+            ? __('Published Sheet changes saved.')
+            : __('Draft details saved.');
+
+        session()->flash('success', $message);
+        $this->announcement = $message;
     }
 
     public function addOption(): void
@@ -156,6 +170,7 @@ new #[Title('Edit Draft Sheet')] class extends Component
     public function removeOption(int $optionId): void
     {
         $this->authorizeOwner();
+        abort_unless($this->sheet->state === Sheet::STATE_DRAFT, 404);
 
         $option = $this->sheet->options()->findOrFail($optionId);
 
@@ -259,6 +274,9 @@ new #[Title('Edit Draft Sheet')] class extends Component
         $this->deadlineAt = trim($this->deadlineAt);
         $this->selectionMaximum = trim($this->selectionMaximum);
         $this->participationPolicy = trim($this->participationPolicy);
+        $this->nameVisibility = trim($this->nameVisibility);
+        $this->emailVisibility = trim($this->emailVisibility);
+        $this->phoneVisibility = trim($this->phoneVisibility);
     }
 
     /** @return array<string, array<int, string>> */
@@ -271,12 +289,15 @@ new #[Title('Edit Draft Sheet')] class extends Component
             'location' => ['nullable', 'string', 'max:255'],
             'deadlineAt' => ['required', 'date_format:Y-m-d\TH:i'],
             'selectionMaximum' => [
-                $publishing ? 'required' : 'nullable',
+                $publishing || $this->sheet->state === Sheet::STATE_PUBLISHED ? 'required' : 'nullable',
                 'integer',
                 'min:1',
                 'max:'.$this->sheet->options()->count(),
             ],
             'participationPolicy' => ['required', 'in:'.Sheet::PARTICIPATION_OPEN.','.Sheet::PARTICIPATION_VERIFIED],
+            'nameVisibility' => ['required', 'in:'.Sheet::VISIBILITY_OWNER_ONLY.','.Sheet::VISIBILITY_PARTICIPANTS],
+            'emailVisibility' => ['required', 'in:'.Sheet::VISIBILITY_OWNER_ONLY.','.Sheet::VISIBILITY_PARTICIPANTS],
+            'phoneVisibility' => ['required', 'in:'.Sheet::VISIBILITY_OWNER_ONLY.','.Sheet::VISIBILITY_PARTICIPANTS],
         ];
     }
 
@@ -293,6 +314,9 @@ new #[Title('Edit Draft Sheet')] class extends Component
             'deadline_at' => Carbon::parse($this->deadlineAt, $this->sheet->timezone)->utc(),
             'selection_maximum' => $this->selectionMaximum === '' ? null : (int) $this->selectionMaximum,
             'participation_policy' => $this->participationPolicy,
+            'name_visibility' => $this->nameVisibility,
+            'email_visibility' => $this->emailVisibility,
+            'phone_visibility' => $this->phoneVisibility,
         ];
     }
 
@@ -399,6 +423,30 @@ new #[Title('Edit Draft Sheet')] class extends Component
                 @enderror
             </fieldset>
 
+            <fieldset class="grid gap-4">
+                <legend class="text-sm font-semibold text-stone-800 dark:text-stone-100">{{ __('Visibility settings') }}</legend>
+                <p class="text-sm text-stone-600 dark:text-stone-400">{{ __('Participants see a field only when this Sheet allows it and that participant consents.') }}</p>
+
+                <div class="grid gap-4 sm:grid-cols-3">
+                    @foreach ([
+                        'nameVisibility' => __('Participant names'),
+                        'emailVisibility' => __('Participant emails'),
+                        'phoneVisibility' => __('Participant phones'),
+                    ] as $visibilityProperty => $visibilityLabel)
+                        <div class="grid gap-2">
+                            <label for="{{ $visibilityProperty }}" class="text-sm font-semibold text-stone-800 dark:text-stone-100">{{ $visibilityLabel }}</label>
+                            <select id="{{ $visibilityProperty }}" wire:model="{{ $visibilityProperty }}" class="block min-h-11 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-base text-stone-950 shadow-sm outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-600/25 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-50 dark:focus:border-teal-400 dark:focus:ring-teal-400/25 sm:text-sm" @if ($errors->has($visibilityProperty)) aria-invalid="true" aria-describedby="{{ $visibilityProperty }}-error" @endif>
+                                <option value="{{ Sheet::VISIBILITY_OWNER_ONLY }}">{{ __('Owner only') }}</option>
+                                <option value="{{ Sheet::VISIBILITY_PARTICIPANTS }}">{{ __('Participants with consent') }}</option>
+                            </select>
+                            @error($visibilityProperty)
+                                <p id="{{ $visibilityProperty }}-error" class="text-sm font-medium text-red-700 dark:text-red-400">{{ $message }}</p>
+                            @enderror
+                        </div>
+                    @endforeach
+                </div>
+            </fieldset>
+
             <div>
                 <x-ui.button type="submit">{{ __('Save details') }}</x-ui.button>
             </div>
@@ -444,12 +492,21 @@ new #[Title('Edit Draft Sheet')] class extends Component
 
             <div>
                 <dt class="text-xs font-bold uppercase tracking-[0.16em] text-stone-500 dark:text-stone-400">{{ __('Participant visibility') }}</dt>
-                <dd class="mt-1 font-semibold">{{ __('Owner only') }}</dd>
+                <dd class="mt-1 font-semibold">
+                    {{ $sheet->name_visibility === Sheet::VISIBILITY_PARTICIPANTS
+                        ? __('Participants with consent')
+                        : __('Owner only') }}
+                </dd>
             </div>
 
             <div>
                 <dt class="text-xs font-bold uppercase tracking-[0.16em] text-stone-500 dark:text-stone-400">{{ __('Contact visibility') }}</dt>
-                <dd class="mt-1 font-semibold">{{ __('Owner only') }}</dd>
+                <dd class="mt-1 font-semibold">
+                    {{ __('Email: :email; Phone: :phone', [
+                        'email' => $sheet->email_visibility === Sheet::VISIBILITY_PARTICIPANTS ? __('Participants with consent') : __('Owner only'),
+                        'phone' => $sheet->phone_visibility === Sheet::VISIBILITY_PARTICIPANTS ? __('Participants with consent') : __('Owner only'),
+                    ]) }}
+                </dd>
             </div>
 
             @if ($sheet->selection_maximum)
@@ -497,12 +554,41 @@ new #[Title('Edit Draft Sheet')] class extends Component
                                         <p class="mt-1 text-sm text-stone-600 dark:text-stone-400">{{ $option->description }}</p>
                                     @endif
                                     <p class="mt-2 text-sm font-semibold">{{ __('Capacity: :capacity', ['capacity' => $option->capacity]) }}</p>
+                                    @if ($sheet->state === Sheet::STATE_PUBLISHED)
+                                        @php
+                                            $remaining = max($option->capacity - $option->claimed_count, 0);
+                                            $isOverCapacity = $option->claimed_count > $option->capacity;
+                                            $isFull = $option->claimed_count === $option->capacity;
+                                        @endphp
+                                        <p class="mt-1 text-sm text-stone-600 dark:text-stone-400">
+                                            {{ __('Claimed: :claimed · Remaining: :remaining', [
+                                                'claimed' => $option->claimed_count,
+                                                'remaining' => $remaining,
+                                            ]) }}
+                                        </p>
+                                        <p role="status" @class([
+                                            'mt-2 text-sm font-bold',
+                                            'text-amber-700 dark:text-amber-400' => $isOverCapacity,
+                                            'text-stone-600 dark:text-stone-300' => $isFull,
+                                            'text-teal-700 dark:text-teal-400' => ! $isOverCapacity && ! $isFull,
+                                        ])>
+                                            @if ($isOverCapacity)
+                                                {{ __('Over-Capacity — :count over', ['count' => $option->claimed_count - $option->capacity]) }}
+                                            @elseif ($isFull)
+                                                {{ __('Full — no capacity remaining') }}
+                                            @else
+                                                {{ trans_choice(':count place available|:count places available', $remaining, ['count' => $remaining]) }}
+                                            @endif
+                                        </p>
+                                    @endif
                                 </div>
                                 <div class="flex flex-wrap gap-2">
                                     <x-ui.button wire:click="moveOptionUp({{ $option->id }})" variant="ghost" size="sm" :disabled="$loop->first">{{ __('Move up') }}</x-ui.button>
                                     <x-ui.button wire:click="moveOptionDown({{ $option->id }})" variant="ghost" size="sm" :disabled="$loop->last">{{ __('Move down') }}</x-ui.button>
                                     <x-ui.button wire:click="startEditingOption({{ $option->id }})" variant="outline" size="sm">{{ __('Edit') }}</x-ui.button>
-                                    <x-ui.button wire:click="removeOption({{ $option->id }})" wire:confirm="{{ __('Remove this Option?') }}" variant="danger" size="sm">{{ __('Remove') }}</x-ui.button>
+                                    @if ($sheet->state === Sheet::STATE_DRAFT)
+                                        <x-ui.button wire:click="removeOption({{ $option->id }})" wire:confirm="{{ __('Remove this Option?') }}" variant="danger" size="sm">{{ __('Remove') }}</x-ui.button>
+                                    @endif
                                 </div>
                             </div>
                         @endif

@@ -27,7 +27,10 @@
         @endif
     @elseif (! $hasAvailableOptions)
         <x-ui.callout class="mt-7 max-w-3xl" :heading="__('No Options available')">
-            <p class="mt-1">{{ __('All Options are currently unavailable.') }}</p>
+            <p class="mt-1">{{ $errors->first('signup') ?: __('All Options are currently unavailable.') }}</p>
+            @if ($unavailableOptionNames !== [])
+                <p class="mt-2 font-semibold">{{ __('Newly unavailable: :options', ['options' => implode(', ', $unavailableOptionNames)]) }}</p>
+            @endif
         </x-ui.callout>
     @else
     <form wire:submit="complete" class="mt-7 grid max-w-3xl gap-6" novalidate>

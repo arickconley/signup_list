@@ -1,0 +1,496 @@
+<?php
+
+use App\Actions\CompleteOpenSignup;
+use App\Actions\CompleteVerifiedSignup;
+use App\Data\CompleteSignupInput;
+use App\Exceptions\CannotCompleteSignup;
+use App\Models\Account;
+use App\Models\OptionClaim;
+use App\Models\Sheet;
+use App\Models\Signup;
+use Illuminate\Support\Carbon;
+use Livewire\Livewire;
+
+test('Owner edits Published Sheet content settings and selection maximum', function () {
+    $this->travelTo(Carbon::parse('2026-08-01 12:00:00 UTC'));
+
+    $owner = Account::factory()->create();
+    $sheet = Sheet::factory()->for($owner, 'owner')->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'selection_maximum' => 1,
+    ]);
+    $sheet->options()->create(['name' => 'Setup', 'capacity' => 2, 'position' => 1]);
+    $sheet->options()->create(['name' => 'Cleanup', 'capacity' => 2, 'position' => 2]);
+    $this->actingAs($owner);
+
+    Livewire::test('pages::sheets.edit', ['sheet' => $sheet])
+        ->assertSee('Published Sheet')
+        ->set('title', 'Updated harvest supper')
+        ->set('description', 'Choose how you can help after dinner.')
+        ->set('eventAt', '2026-09-05T17:30')
+        ->set('location', 'North field barn')
+        ->set('deadlineAt', '2026-09-04T23:59')
+        ->set('participationPolicy', Sheet::PARTICIPATION_VERIFIED)
+        ->set('nameVisibility', Sheet::VISIBILITY_PARTICIPANTS)
+        ->set('emailVisibility', Sheet::VISIBILITY_PARTICIPANTS)
+        ->set('phoneVisibility', Sheet::VISIBILITY_PARTICIPANTS)
+        ->set('selectionMaximum', '2')
+        ->call('saveDetails')
+        ->assertHasNoErrors()
+        ->assertSee('Published Sheet changes saved.');
+
+    Livewire::test('pages::sheets.edit', ['sheet' => $sheet->refresh()])
+        ->assertSet('title', 'Updated harvest supper')
+        ->assertSet('description', 'Choose how you can help after dinner.')
+        ->assertSet('eventAt', '2026-09-05T17:30')
+        ->assertSet('location', 'North field barn')
+        ->assertSet('deadlineAt', '2026-09-04T23:59')
+        ->assertSet('participationPolicy', Sheet::PARTICIPATION_VERIFIED)
+        ->assertSet('nameVisibility', Sheet::VISIBILITY_PARTICIPANTS)
+        ->assertSet('emailVisibility', Sheet::VISIBILITY_PARTICIPANTS)
+        ->assertSet('phoneVisibility', Sheet::VISIBILITY_PARTICIPANTS)
+        ->assertSet('selectionMaximum', '2')
+        ->assertSee('Participants with consent');
+
+    $this->get(route('sheets.show', $sheet))
+        ->assertOk()
+        ->assertSee('Updated harvest supper')
+        ->assertSee('Choose how you can help after dinner.')
+        ->assertSee('North field barn')
+        ->assertSee('Sep 5, 2026 at 5:30 PM PDT')
+        ->assertSee('Sep 4, 2026 at 11:59 PM PDT')
+        ->assertSee('Verified Participation');
+});
+
+test('Owner adds edits and reorders Published Options without replacing claims or deleting Options', function () {
+    $owner = Account::factory()->create();
+    $sheet = Sheet::factory()->for($owner, 'owner')->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'selection_maximum' => 2,
+    ]);
+    $first = $sheet->options()->create([
+        'name' => 'Welcome table',
+        'capacity' => 2,
+        'claimed_count' => 1,
+        'position' => 1,
+    ]);
+    $second = $sheet->options()->create([
+        'name' => 'Cleanup',
+        'capacity' => 2,
+        'position' => 2,
+    ]);
+    $signup = $sheet->signups()->create(['name_snapshot' => 'Existing participant']);
+    $claim = $signup->optionClaims()->create(['option_id' => $first->id]);
+    $this->actingAs($owner);
+
+    $component = Livewire::test('pages::sheets.edit', ['sheet' => $sheet])
+        ->assertDontSeeHtml('wire:click="removeOption')
+        ->set('optionName', 'Dessert service')
+        ->set('optionDescription', 'Plate the pies.')
+        ->set('optionCapacity', '4')
+        ->call('addOption')
+        ->assertHasNoErrors()
+        ->assertSee('Option added.');
+
+    $added = $sheet->options()->where('name', 'Dessert service')->sole();
+
+    $component
+        ->call('startEditingOption', $first->id)
+        ->set('editOptionName', 'Guest welcome')
+        ->set('editOptionDescription', 'Greet arriving participants.')
+        ->set('editOptionCapacity', '3')
+        ->call('updateOption')
+        ->assertHasNoErrors()
+        ->assertSee('Option updated.')
+        ->call('moveOptionUp', $added->id)
+        ->assertSeeInOrder(['Guest welcome', 'Dessert service', 'Cleanup'])
+        ->call('removeOption', $second->id)
+        ->assertStatus(404);
+
+    Livewire::test('pages::sheets.edit', ['sheet' => $sheet->refresh()])
+        ->assertSeeInOrder(['Guest welcome', 'Dessert service', 'Cleanup'])
+        ->assertDontSeeHtml('wire:click="removeOption');
+
+    expect(Signup::query()->sole()->id)->toBe($signup->id)
+        ->and($signup->optionClaims()->sole()->id)->toBe($claim->id)
+        ->and($first->refresh())
+        ->id->toBe($first->id)
+        ->claimed_count->toBe(1)
+        ->and($second->refresh()->id)->toBe($second->id);
+});
+
+test('Published capacity changes preserve claims and immediately govern new Signups', function () {
+    $owner = Account::factory()->create();
+    $sheet = Sheet::factory()->for($owner, 'owner')->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_OPEN,
+        'selection_maximum' => 1,
+    ]);
+    $option = $sheet->options()->create([
+        'name' => 'Pie table',
+        'capacity' => 1,
+        'claimed_count' => 1,
+        'position' => 1,
+    ]);
+    $existingSignup = $sheet->signups()->create(['name_snapshot' => 'Existing participant']);
+    $existingClaim = $existingSignup->optionClaims()->create(['option_id' => $option->id]);
+
+    Livewire::actingAs($owner)
+        ->test('pages::sheets.edit', ['sheet' => $sheet])
+        ->call('startEditingOption', $option->id)
+        ->set('editOptionCapacity', '2')
+        ->call('updateOption')
+        ->assertHasNoErrors();
+
+    $this->get(route('sheets.show', $sheet))
+        ->assertOk()
+        ->assertSeeInOrder(['Pie table', 'Available', 'Total', '2', 'Claimed', '1', 'Remaining', '1']);
+
+    Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
+        ->set('name', 'New participant')
+        ->set('selectedOptions', [$option->public_id])
+        ->call('complete')
+        ->assertHasNoErrors()
+        ->assertSee('Signup complete');
+
+    $newSignup = $sheet->signups()->where('name_snapshot', 'New participant')->sole();
+    $newClaim = $newSignup->optionClaims()->sole();
+
+    Livewire::actingAs($owner)
+        ->test('pages::sheets.edit', ['sheet' => $sheet->refresh()])
+        ->call('startEditingOption', $option->id)
+        ->set('editOptionCapacity', '1')
+        ->call('updateOption')
+        ->assertHasNoErrors()
+        ->assertSee('Over-Capacity — 1 over');
+
+    $this->get(route('sheets.show', $sheet))
+        ->assertOk()
+        ->assertSeeInOrder(['Pie table', 'Over capacity — unavailable', 'Total', '1', 'Claimed', '2', 'Remaining', '0']);
+
+    Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
+        ->set('name', 'Blocked participant')
+        ->set('selectedOptions', [$option->public_id])
+        ->call('complete')
+        ->assertHasErrors(['signup'])
+        ->assertSee('Newly unavailable: Pie table');
+
+    expect($sheet->signups()->count())->toBe(2)
+        ->and(OptionClaim::query()->orderBy('id')->pluck('id')->all())
+        ->toBe([$existingClaim->id, $newClaim->id])
+        ->and($option->refresh()->claimed_count)->toBe(2);
+});
+
+test('Published Sheet selection maximum remains required and no greater than its Option count', function (string $selectionMaximum) {
+    $owner = Account::factory()->create();
+    $sheet = Sheet::factory()->for($owner, 'owner')->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'selection_maximum' => 1,
+    ]);
+    $sheet->options()->create(['name' => 'Only Option', 'capacity' => 2, 'position' => 1]);
+
+    Livewire::actingAs($owner)
+        ->test('pages::sheets.edit', ['sheet' => $sheet])
+        ->set('selectionMaximum', $selectionMaximum)
+        ->call('saveDetails')
+        ->assertHasErrors(['selectionMaximum']);
+
+    Livewire::actingAs($owner)
+        ->test('pages::sheets.edit', ['sheet' => $sheet->refresh()])
+        ->assertSet('selectionMaximum', '1');
+})->with([
+    'missing' => '',
+    'greater than Option count' => '2',
+]);
+
+test('lowered Published selection maximum preserves over-limit Signup and permits only removal progress until compliant', function () {
+    $owner = Account::factory()->create();
+    $participant = Account::factory()->create(['email' => 'participant@example.com']);
+    $sheet = Sheet::factory()->for($owner, 'owner')->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'selection_maximum' => 3,
+    ]);
+    $options = collect(['First Claim', 'Second Claim', 'Third Claim'])->map(
+        fn (string $name, int $index) => $sheet->options()->create([
+            'name' => $name,
+            'capacity' => 3,
+            'claimed_count' => 1,
+            'position' => $index + 1,
+        ]),
+    );
+    $available = $sheet->options()->create([
+        'name' => 'Available after compliance',
+        'capacity' => 3,
+        'position' => 4,
+    ]);
+    $signup = $sheet->signups()->create([
+        'name_snapshot' => 'Participant Snapshot',
+        'email_snapshot' => $participant->email,
+    ]);
+    $signup->account()->associate($participant);
+    $signup->save();
+
+    foreach ($options as $option) {
+        $signup->optionClaims()->create(['option_id' => $option->id]);
+    }
+
+    $originalClaimIds = $signup->optionClaims()->orderBy('id')->pluck('id')->all();
+
+    Livewire::actingAs($owner)
+        ->test('pages::sheets.edit', ['sheet' => $sheet])
+        ->set('selectionMaximum', '1')
+        ->call('saveDetails')
+        ->assertHasNoErrors();
+
+    expect($signup->optionClaims()->orderBy('id')->pluck('id')->all())->toBe($originalClaimIds);
+
+    $this->actingAs($owner)
+        ->get(route('sheets.signups', $sheet))
+        ->assertOk()
+        ->assertSee('Over limit — 3 of 1 maximum');
+
+    $component = Livewire::actingAs($participant)
+        ->test('pages::signups.edit', ['signup' => $signup])
+        ->assertSee('Signup over current limit')
+        ->assertSee('Remove existing claims before adding another Option.')
+        ->set('selectedOptions', [$options[0]->public_id, $options[1]->public_id])
+        ->call('save')
+        ->assertHasNoErrors()
+        ->assertSee('Signup over current limit');
+
+    $retainedClaimIds = $signup->optionClaims()->orderBy('id')->pluck('id')->all();
+
+    $component
+        ->set('selectedOptions', [$options[0]->public_id, $options[1]->public_id, $available->public_id])
+        ->call('save')
+        ->assertHasErrors(['signup'])
+        ->assertSee('Remove existing Option Claims before adding another Option.');
+
+    expect($signup->optionClaims()->orderBy('id')->pluck('id')->all())->toBe($retainedClaimIds)
+        ->and($available->refresh()->claimed_count)->toBe(0);
+
+    $component
+        ->set('selectedOptions', [$options[0]->public_id])
+        ->call('save')
+        ->assertHasNoErrors()
+        ->assertDontSee('Signup over current limit')
+        ->set('selectedOptions', [$available->public_id])
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect($signup->refresh()->id)->toBe($signup->id)
+        ->and($signup->optionClaims()->sole()->option_id)->toBe($available->id)
+        ->and($available->refresh()->claimed_count)->toBe(1);
+});
+
+test('Published policy visibility and limits affect future completion without rewriting existing Signups', function () {
+    $owner = Account::factory()->create();
+    $verifiedParticipant = Account::factory()->create([
+        'name' => 'Verified Participant',
+        'email' => 'verified-participant@example.com',
+    ]);
+    $sheet = Sheet::factory()->for($owner, 'owner')->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_OPEN,
+        'selection_maximum' => 2,
+        'name_visibility' => Sheet::VISIBILITY_OWNER_ONLY,
+        'email_visibility' => Sheet::VISIBILITY_OWNER_ONLY,
+        'phone_visibility' => Sheet::VISIBILITY_OWNER_ONLY,
+    ]);
+    $reduced = $sheet->options()->create([
+        'name' => 'Reduced capacity',
+        'capacity' => 3,
+        'claimed_count' => 2,
+        'position' => 1,
+    ]);
+    $available = $sheet->options()->create([
+        'name' => 'Future verified choice',
+        'capacity' => 2,
+        'position' => 2,
+    ]);
+
+    $existingSignups = collect(['First Existing', 'Second Existing'])->map(
+        function (string $name) use ($sheet, $reduced) {
+            $signup = $sheet->signups()->create([
+                'name_snapshot' => $name,
+                'email_snapshot' => null,
+                'phone_snapshot' => '555-0100',
+                'name_consent' => false,
+                'email_consent' => false,
+                'phone_consent' => false,
+            ]);
+            $signup->optionClaims()->create(['option_id' => $reduced->id]);
+
+            return $signup;
+        },
+    );
+    $existingSignupSnapshots = $existingSignups->map(fn ($signup) => [
+        'id' => $signup->id,
+        'attributes' => $signup->only([
+            'name_snapshot',
+            'email_snapshot',
+            'phone_snapshot',
+            'name_consent',
+            'email_consent',
+            'phone_consent',
+        ]),
+        'claim_ids' => $signup->optionClaims()->pluck('id')->all(),
+    ])->all();
+
+    Livewire::actingAs($owner)
+        ->test('pages::sheets.edit', ['sheet' => $sheet])
+        ->set('participationPolicy', Sheet::PARTICIPATION_VERIFIED)
+        ->set('selectionMaximum', '1')
+        ->set('nameVisibility', Sheet::VISIBILITY_PARTICIPANTS)
+        ->set('emailVisibility', Sheet::VISIBILITY_PARTICIPANTS)
+        ->set('phoneVisibility', Sheet::VISIBILITY_PARTICIPANTS)
+        ->call('saveDetails')
+        ->assertHasNoErrors()
+        ->call('startEditingOption', $reduced->id)
+        ->set('editOptionCapacity', '1')
+        ->call('updateOption')
+        ->assertHasNoErrors();
+
+    expect($sheet->signups()->orderBy('id')->get()->map(fn ($signup) => [
+        'id' => $signup->id,
+        'attributes' => $signup->only([
+            'name_snapshot',
+            'email_snapshot',
+            'phone_snapshot',
+            'name_consent',
+            'email_consent',
+            'phone_consent',
+        ]),
+        'claim_ids' => $signup->optionClaims()->pluck('id')->all(),
+    ])->all())->toBe($existingSignupSnapshots);
+
+    $input = fn (array $optionPublicIds) => new CompleteSignupInput(
+        sheetPublicId: $sheet->public_id,
+        name: 'Future Participant',
+        phone: null,
+        optionPublicIds: $optionPublicIds,
+        email: $verifiedParticipant->email,
+    );
+
+    expect(fn () => app(CompleteOpenSignup::class)->handle($input([$available->public_id])))
+        ->toThrow(CannotCompleteSignup::class, 'no longer open');
+    expect(fn () => app(CompleteVerifiedSignup::class)->handle(
+        $verifiedParticipant,
+        $input([$reduced->public_id, $available->public_id]),
+    ))->toThrow(CannotCompleteSignup::class, 'Choose between 1 and 1');
+    expect(fn () => app(CompleteVerifiedSignup::class)->handle(
+        $verifiedParticipant,
+        $input([$reduced->public_id]),
+    ))->toThrow(CannotCompleteSignup::class, 'became unavailable');
+
+    app(CompleteVerifiedSignup::class)->handle(
+        $verifiedParticipant,
+        $input([$available->public_id]),
+    );
+
+    expect($sheet->signups()->count())->toBe(3)
+        ->and($sheet->signups()->where('account_id', $verifiedParticipant->id)->sole()->optionClaims()->sole()->option_id)
+        ->toBe($available->id)
+        ->and($reduced->refresh()->claimed_count)->toBe(2)
+        ->and($available->refresh()->claimed_count)->toBe(1);
+});
+
+test('other Account cannot view or mutate a Published Sheet editor', function () {
+    $owner = Account::factory()->create();
+    $otherAccount = Account::factory()->create();
+    $sheet = Sheet::factory()->for($owner, 'owner')->create([
+        'title' => 'Owner Published Sheet',
+        'state' => Sheet::STATE_PUBLISHED,
+        'selection_maximum' => 1,
+    ]);
+    $option = $sheet->options()->create([
+        'name' => 'Owner Option',
+        'capacity' => 2,
+        'position' => 1,
+    ]);
+
+    $this->actingAs($otherAccount)
+        ->get(route('sheets.edit', $sheet))
+        ->assertNotFound()
+        ->assertDontSee('Owner Published Sheet');
+
+    $component = Livewire::actingAs($owner)
+        ->test('pages::sheets.edit', ['sheet' => $sheet])
+        ->set('title', 'Intruder title')
+        ->call('startEditingOption', $option->id)
+        ->set('editOptionCapacity', '99');
+
+    $this->actingAs($otherAccount);
+    $component->call('saveDetails')->assertStatus(404);
+
+    expect($sheet->refresh()->title)->toBe('Owner Published Sheet')
+        ->and($option->refresh()->capacity)->toBe(2);
+});
+
+test('Published deadline edits immediately close and reopen participant actions', function () {
+    $this->travelTo(Carbon::parse('2026-08-01 12:00:00 UTC'));
+
+    $owner = Account::factory()->create();
+    $participant = Account::factory()->create(['email' => 'deadline-participant@example.com']);
+    $sheet = Sheet::factory()->for($owner, 'owner')->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_OPEN,
+        'selection_maximum' => 1,
+        'deadline_at' => Carbon::parse('2026-08-10 23:59:00 America/Los_Angeles')->utc(),
+    ]);
+    $option = $sheet->options()->create([
+        'name' => 'Deadline choice',
+        'capacity' => 3,
+        'claimed_count' => 1,
+        'position' => 1,
+    ]);
+    $signup = $sheet->signups()->create([
+        'name_snapshot' => 'Existing Participant',
+        'email_snapshot' => $participant->email,
+    ]);
+    $signup->account()->associate($participant);
+    $signup->save();
+    $claim = $signup->optionClaims()->create(['option_id' => $option->id]);
+
+    $participantComponent = Livewire::actingAs($participant)
+        ->test('pages::signups.edit', ['signup' => $signup]);
+
+    Livewire::actingAs($owner)
+        ->test('pages::sheets.edit', ['sheet' => $sheet])
+        ->set('deadlineAt', '2026-07-31T23:59')
+        ->call('saveDetails')
+        ->assertHasNoErrors();
+
+    $this->get(route('sheets.show', $sheet))
+        ->assertOk()
+        ->assertSee('Closed to signups');
+
+    $this->actingAs($participant);
+    $participantComponent
+        ->set('name', 'Blocked Edit')
+        ->assertStatus(404);
+
+    expect(fn () => app(CompleteOpenSignup::class)->handle(new CompleteSignupInput(
+        sheetPublicId: $sheet->public_id,
+        name: 'Blocked Signup',
+        phone: null,
+        optionPublicIds: [$option->public_id],
+    )))->toThrow(CannotCompleteSignup::class, 'no longer open');
+
+    Livewire::actingAs($owner)
+        ->test('pages::sheets.edit', ['sheet' => $sheet->refresh()])
+        ->set('deadlineAt', '2026-08-11T23:59')
+        ->call('saveDetails')
+        ->assertHasNoErrors();
+
+    Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
+        ->set('name', 'After Reopen')
+        ->set('selectedOptions', [$option->public_id])
+        ->call('complete')
+        ->assertHasNoErrors()
+        ->assertSee('Signup complete');
+
+    expect($signup->refresh()->id)->toBe($signup->id)
+        ->and($signup->optionClaims()->sole()->id)->toBe($claim->id)
+        ->and($option->refresh()->claimed_count)->toBe(2);
+});
