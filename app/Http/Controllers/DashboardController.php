@@ -16,15 +16,15 @@ class DashboardController extends Controller
 
         abort_unless($account instanceof Account, 403);
 
+        $ownedSheets = $account->ownedSheets()
+            ->latest()
+            ->get();
+
         return view('dashboard', [
-            'drafts' => $account->ownedSheets()
-                ->where('state', Sheet::STATE_DRAFT)
-                ->latest()
-                ->get(),
-            'archivedSheets' => $account->ownedSheets()
-                ->where('state', Sheet::STATE_ARCHIVED)
-                ->latest()
-                ->get(),
+            'drafts' => $ownedSheets->where('state', Sheet::STATE_DRAFT),
+            'openSheets' => $ownedSheets->filter->isOpen(),
+            'closedSheets' => $ownedSheets->filter->isClosed(),
+            'archivedSheets' => $ownedSheets->where('state', Sheet::STATE_ARCHIVED),
             'attachedSignups' => $account->signups()
                 ->whereHas('sheet', function (Builder $query): void {
                     $query->where('state', '!=', Sheet::STATE_ARCHIVED);

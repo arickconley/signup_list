@@ -66,7 +66,7 @@ new #[Title('Create a signup sheet')] class extends Component
 
 ?>
 
-<x-layouts::app :title="__('Create a signup sheet')">
+<x-layouts::app :title="__('Create a signup sheet')" robots="noindex, nofollow">
     <div class="mx-auto max-w-3xl">
         <p class="text-xs font-bold uppercase tracking-[0.18em] text-teal-700 dark:text-teal-400">{{ __('New Draft Sheet') }}</p>
         <h1 class="mt-2 font-display text-4xl font-semibold tracking-tight">{{ __('Create a signup sheet') }}</h1>

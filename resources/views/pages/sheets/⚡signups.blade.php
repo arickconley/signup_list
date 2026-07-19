@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\DuplicateSheet;
 use App\Actions\RemoveOwnerOptionClaim;
 use App\Actions\RemoveOwnerSignup;
 use App\Exceptions\CannotRemoveOwnerOptionClaim;
@@ -121,6 +122,19 @@ new #[Layout('layouts.app', ['robots' => 'noindex, nofollow'])] #[Title('Signup 
         ]);
     }
 
+    public function duplicate(DuplicateSheet $duplicateSheet): void
+    {
+        $this->authorizeOwner();
+
+        $owner = Auth::user();
+        abort_unless($owner instanceof Account, 404);
+
+        $duplicate = $duplicateSheet->handle($owner, $this->sheet);
+
+        session()->flash('success', __('Signup Sheet duplicated into a new Draft Sheet.'));
+        $this->redirectRoute('sheets.edit', $duplicate, navigate: true);
+    }
+
     /** @return Collection<int, Signup> */
     #[Computed]
     public function signups(): Collection
@@ -171,9 +185,18 @@ new #[Layout('layouts.app', ['robots' => 'noindex, nofollow'])] #[Title('Signup 
                     {{ __('Submitted contact details and current Option Claims are private to you.') }}
                 </p>
             </div>
-            <a href="{{ route('sheets.edit', $sheet) }}" wire:navigate class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg border border-stone-300 bg-white px-4 text-sm font-semibold shadow-sm hover:border-teal-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2 dark:border-stone-700 dark:bg-stone-900 dark:hover:border-teal-400">
-                {{ __('Edit Signup Sheet') }}
-            </a>
+            <div class="flex shrink-0 flex-wrap gap-2">
+                <h2 id="sheet-actions-title" class="sr-only">{{ __('Sheet actions') }}</h2>
+                @if ($sheet->isArchived())
+                    <x-ui.button wire:click="duplicate" wire:loading.attr="disabled" wire:target="duplicate" variant="outline">
+                        {{ __('Duplicate Sheet') }}
+                    </x-ui.button>
+                @else
+                    <a href="{{ route('sheets.edit', $sheet) }}" wire:navigate class="inline-flex min-h-11 items-center justify-center rounded-lg border border-stone-300 bg-white px-4 text-sm font-semibold shadow-sm hover:border-teal-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2 dark:border-stone-700 dark:bg-stone-900 dark:hover:border-teal-400">
+                        {{ __('Edit Signup Sheet') }}
+                    </a>
+                @endif
+            </div>
         </div>
     </header>
 

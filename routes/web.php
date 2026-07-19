@@ -18,15 +18,21 @@ Route::get('access/{challenge}/link/{token}', [AccountAccessController::class, '
     ->name('account-access.magic');
 
 Route::middleware(['auth', 'verified', 'profile.complete'])->group(function () {
-    Route::get('dashboard', DashboardController::class)->name('dashboard');
+    Route::get('dashboard', DashboardController::class)
+        ->middleware(PreventSearchIndexing::class)
+        ->name('dashboard');
     Route::get('sheets/{sheet}/signups/print', OwnerPrintViewController::class)
         ->middleware(PreventSearchIndexing::class)
         ->name('sheets.signups.print');
     Route::livewire('signups/{signup}/edit', 'pages::signups.edit')
         ->middleware(PreventSearchIndexing::class)
         ->name('signups.edit');
-    Route::livewire('sheets/create', 'pages::sheets.create')->name('sheets.create');
-    Route::livewire('sheets/{sheet}/edit', 'pages::sheets.edit')->name('sheets.edit');
+    Route::livewire('sheets/create', 'pages::sheets.create')
+        ->middleware(PreventSearchIndexing::class)
+        ->name('sheets.create');
+    Route::livewire('sheets/{sheet}/edit', 'pages::sheets.edit')
+        ->middleware(PreventSearchIndexing::class)
+        ->name('sheets.edit');
     Route::livewire('sheets/{sheet}/signups', 'pages::sheets.signups')
         ->middleware(PreventSearchIndexing::class)
         ->name('sheets.signups');

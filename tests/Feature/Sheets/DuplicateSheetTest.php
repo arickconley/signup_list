@@ -33,6 +33,27 @@ test('eligible Owner duplicates an owned Signup Sheet into a new Draft edit page
         ->assertNotFound();
 });
 
+test('Owner duplicates an Archived Sheet from its private Signup View', function () {
+    $owner = Account::factory()->create();
+    $archived = Sheet::factory()->for($owner, 'owner')->create([
+        'title' => 'Archived neighborhood cleanup',
+        'state' => Sheet::STATE_ARCHIVED,
+    ]);
+
+    $component = Livewire::actingAs($owner)
+        ->test('pages::sheets.signups', ['sheet' => $archived])
+        ->assertSee('Duplicate Sheet')
+        ->assertDontSee('Edit Signup Sheet')
+        ->call('duplicate');
+
+    $duplicate = $owner->ownedSheets()->whereKeyNot($archived->id)->sole();
+
+    $component->assertRedirect(route('sheets.edit', $duplicate, absolute: false));
+    expect($duplicate)
+        ->title->toBe($archived->title)
+        ->state->toBe(Sheet::STATE_DRAFT);
+});
+
 test('duplicate copies reusable content and settings from any Sheet state', function (string $sourceState) {
     $this->travelTo(Carbon::parse('2026-10-25 12:00:00 UTC'));
 

@@ -521,7 +521,7 @@ new #[Title('Edit Signup Sheet')] class extends Component
 
 ?>
 
-<x-layouts::app :title="$sheet->title">
+<x-layouts::app :title="$sheet->title" robots="noindex, nofollow">
     <div class="mx-auto max-w-3xl">
         <p class="text-xs font-bold uppercase tracking-[0.18em] text-teal-700 dark:text-teal-400">
             {{ match ($sheet->state) {
