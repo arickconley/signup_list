@@ -253,3 +253,69 @@ test('lowered maximum rejects every addition or swap until existing claims are c
         ->toBe([$first->id, $second->id, $third->id])
         ->and($new->refresh()->claimed_count)->toBe(0);
 })->with(['addition', 'over-limit swap', 'same-request compliant swap']);
+
+test('unauthorized Account and non-editable Signup lifecycle reject without changing Signup or capacity', function (string $case) {
+    ['account' => $account, 'sheet' => $sheet, 'signup' => $signup] = issue14EditableSignup(selectionMaximum: 1);
+    $option = issue14ClaimedOption($sheet, $signup, 'Protected claim', 1);
+    $actor = $account;
+
+    match ($case) {
+        'another Account' => $actor = Account::factory()->create(),
+        'unverified attached Account' => $account->forceFill(['email_verified_at' => null])->save(),
+        'Pending Account Association' => (function () use ($signup, $account): void {
+            $signup->forceFill(['account_id' => null])->save();
+            $signup->pendingAccountAssociation()->create(['account_id' => $account->id]);
+        })(),
+        'Unregistered Participant' => $signup->forceFill([
+            'account_id' => null,
+            'email_snapshot' => null,
+        ])->save(),
+        'Draft Sheet' => $sheet->update(['state' => Sheet::STATE_DRAFT]),
+        'Archived Sheet' => $sheet->update(['state' => Sheet::STATE_ARCHIVED]),
+        'deadline passed' => $sheet->update(['deadline_at' => now()->subMinute()]),
+    };
+
+    $snapshot = $signup->fresh()->only([
+        'name_snapshot',
+        'email_snapshot',
+        'phone_snapshot',
+        'name_consent',
+        'email_consent',
+        'phone_consent',
+    ]);
+    $claimIds = $signup->optionClaims()->pluck('id')->all();
+
+    expect(fn () => app(UpdateParticipantSignup::class)->handle(
+        $actor,
+        issue14UpdateInput($signup, [$option->public_id]),
+    ))->toThrow(CannotUpdateParticipantSignup::class);
+
+    expect($signup->refresh()->only(array_keys($snapshot)))->toBe($snapshot)
+        ->and($signup->optionClaims()->pluck('id')->all())->toBe($claimIds)
+        ->and($option->refresh()->claimed_count)->toBe(1);
+})->with([
+    'another Account',
+    'unverified attached Account',
+    'Pending Account Association',
+    'Unregistered Participant',
+    'Draft Sheet',
+    'Archived Sheet',
+    'deadline passed',
+]);
+
+test('associated verified Account updates its Signup on an open Verified Participation Sheet', function () {
+    ['account' => $account, 'sheet' => $sheet, 'signup' => $signup] = issue14EditableSignup(selectionMaximum: 1);
+    $sheet->update(['participation_policy' => Sheet::PARTICIPATION_VERIFIED]);
+    $option = issue14ClaimedOption($sheet, $signup, 'Verified claim', 1);
+
+    app(UpdateParticipantSignup::class)->handle(
+        $account,
+        issue14UpdateInput($signup, [$option->public_id]),
+    );
+
+    expect($signup->refresh())
+        ->name_snapshot->toBe('Updated Name')
+        ->phone_snapshot->toBe('555-0199')
+        ->and($signup->optionClaims()->pluck('option_id')->all())->toBe([$option->id])
+        ->and($option->refresh()->claimed_count)->toBe(1);
+});

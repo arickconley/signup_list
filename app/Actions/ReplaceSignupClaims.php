@@ -67,6 +67,17 @@ final class ReplaceSignupClaims
         $this->apply($signup, $selection);
     }
 
+    public function releaseAll(Signup $signup): void
+    {
+        $this->assertInsideTransaction();
+
+        $claims = $signup->optionClaims()
+            ->orderBy('option_id')
+            ->get();
+
+        $this->remove($claims->all());
+    }
+
     /**
      * @param  Collection<int, OptionClaim>  $currentClaims
      * @param  array<int, string>  $optionPublicIds
@@ -152,18 +163,7 @@ final class ReplaceSignupClaims
 
     private function apply(Signup $signup, PreparedSignupSelection $selection): void
     {
-        foreach ($selection->removedClaims as $claim) {
-            $decremented = Option::query()
-                ->whereKey($claim->option_id)
-                ->where('claimed_count', '>', 0)
-                ->decrement('claimed_count');
-
-            if ($decremented !== 1) {
-                throw new LogicException('Option claimed count is inconsistent with its claims.');
-            }
-
-            $claim->delete();
-        }
+        $this->remove($selection->removedClaims);
 
         foreach ($selection->addedOptions as $option) {
             $incremented = Option::query()
@@ -180,6 +180,23 @@ final class ReplaceSignupClaims
             }
 
             $signup->optionClaims()->create(['option_id' => $option->id]);
+        }
+    }
+
+    /** @param array<int, OptionClaim> $claims */
+    private function remove(array $claims): void
+    {
+        foreach ($claims as $claim) {
+            $decremented = Option::query()
+                ->whereKey($claim->option_id)
+                ->where('claimed_count', '>', 0)
+                ->decrement('claimed_count');
+
+            if ($decremented !== 1) {
+                throw new LogicException('Option claimed count is inconsistent with its claims.');
+            }
+
+            $claim->delete();
         }
     }
 
