@@ -2,6 +2,7 @@
 
 use App\Actions\CompleteOpenSignup;
 use App\Actions\CompleteVerifiedSignup;
+use App\Actions\DeleteOwnerOption;
 use App\Data\CompleteSignupInput;
 use App\Exceptions\CannotCompleteSignup;
 use App\Models\Account;
@@ -9,6 +10,7 @@ use App\Models\OptionClaim;
 use App\Models\Sheet;
 use App\Models\Signup;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Mail;
 use Livewire\Livewire;
 
 test('Owner edits Published Sheet content settings and selection maximum', function () {
@@ -117,6 +119,247 @@ test('Owner adds edits and reorders Published Options without replacing claims o
         ->id->toBe($first->id)
         ->claimed_count->toBe(1)
         ->and($second->refresh()->id)->toBe($second->id);
+});
+
+test('Owner sees affected claims and cancels claimed Option deletion', function () {
+    $owner = Account::factory()->create();
+    $sheet = Sheet::factory()->for($owner, 'owner')->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'selection_maximum' => 1,
+    ]);
+    $target = $sheet->options()->create([
+        'name' => 'Welcome table',
+        'capacity' => 3,
+        'claimed_count' => 2,
+        'position' => 1,
+    ]);
+    $retained = $sheet->options()->create([
+        'name' => 'Cleanup',
+        'capacity' => 3,
+        'position' => 2,
+    ]);
+    $claims = collect(['First participant', 'Second participant'])->map(
+        function (string $name) use ($sheet, $target) {
+            $signup = $sheet->signups()->create(['name_snapshot' => $name]);
+
+            return $signup->optionClaims()->create(['option_id' => $target->id]);
+        },
+    );
+
+    Livewire::actingAs($owner)
+        ->test('pages::sheets.edit', ['sheet' => $sheet])
+        ->assertSeeHtml('wire:click="requestOptionDeletion('.$target->id.')"')
+        ->call('requestOptionDeletion', $target->id)
+        ->assertSet('deletingOptionId', $target->id)
+        ->assertSet('deletingOptionClaimCount', 2)
+        ->assertSee('Delete Welcome table?')
+        ->assertSee('This will remove 2 Option Claims.')
+        ->assertSee('This cannot be undone.')
+        ->assertSeeHtml('wire:click="confirmOptionDeletion"')
+        ->assertSeeHtml('wire:click="cancelOptionDeletion"')
+        ->call('cancelOptionDeletion')
+        ->assertSet('deletingOptionId', null)
+        ->assertSet('deletingOptionClaimCount', 0)
+        ->assertDontSee('This will remove 2 Option Claims.');
+
+    expect($sheet->options()->whereKey($target->id)->exists())->toBeTrue()
+        ->and($sheet->options()->whereKey($retained->id)->exists())->toBeTrue()
+        ->and(OptionClaim::query()->whereIn('id', $claims->pluck('id'))->count())->toBe(2);
+});
+
+test('Owner confirms claimed Option deletion from the Published Sheet editor', function () {
+    $owner = Account::factory()->create();
+    $sheet = Sheet::factory()->for($owner, 'owner')->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'selection_maximum' => 2,
+    ]);
+    $target = $sheet->options()->create([
+        'name' => 'Welcome table',
+        'capacity' => 2,
+        'claimed_count' => 1,
+        'position' => 1,
+    ]);
+    $retained = $sheet->options()->create([
+        'name' => 'Cleanup',
+        'capacity' => 2,
+        'position' => 2,
+    ]);
+    $signup = $sheet->signups()->create(['name_snapshot' => 'Participant']);
+    $claim = $signup->optionClaims()->create(['option_id' => $target->id]);
+
+    Livewire::actingAs($owner)
+        ->test('pages::sheets.edit', ['sheet' => $sheet])
+        ->call('requestOptionDeletion', $target->id)
+        ->call('confirmOptionDeletion')
+        ->assertSet('deletingOptionId', null)
+        ->assertSet('deletingOptionClaimCount', 0)
+        ->assertSet('announcement', 'Option deleted.')
+        ->assertSet('selectionMaximum', '1')
+        ->assertDontSee('Welcome table');
+
+    expect($sheet->options()->whereKey($target->id)->exists())->toBeFalse()
+        ->and(OptionClaim::query()->find($claim->id))->toBeNull()
+        ->and($sheet->options()->whereKey($retained->id)->exists())->toBeTrue()
+        ->and($sheet->refresh()->selection_maximum)->toBe(1);
+});
+
+test('Owner confirms unclaimed Option deletion from the Published Sheet editor', function () {
+    Mail::fake();
+
+    $owner = Account::factory()->create();
+    $sheet = Sheet::factory()->for($owner, 'owner')->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'selection_maximum' => 2,
+    ]);
+    $target = $sheet->options()->create([
+        'name' => 'Unclaimed table',
+        'capacity' => 2,
+        'position' => 1,
+    ]);
+    $retained = $sheet->options()->create([
+        'name' => 'Cleanup',
+        'capacity' => 2,
+        'position' => 2,
+    ]);
+
+    Livewire::actingAs($owner)
+        ->test('pages::sheets.edit', ['sheet' => $sheet])
+        ->call('requestOptionDeletion', $target->id)
+        ->assertSet('deletingOptionId', $target->id)
+        ->assertSet('deletingOptionClaimCount', 0)
+        ->assertSee('This will remove 0 Option Claims.')
+        ->call('confirmOptionDeletion')
+        ->assertSet('deletingOptionId', null)
+        ->assertSet('deletingOptionClaimCount', 0)
+        ->assertSet('announcement', 'Option deleted.')
+        ->assertSet('selectionMaximum', '1')
+        ->assertDontSee('Unclaimed table');
+
+    expect($sheet->options()->whereKey($target->id)->exists())->toBeFalse()
+        ->and($sheet->options()->whereKey($retained->id)->exists())->toBeTrue()
+        ->and($retained->refresh()->position)->toBe(1)
+        ->and($sheet->refresh()->selection_maximum)->toBe(1);
+    Mail::assertNothingQueued();
+});
+
+test('other Account cannot confirm a post-mount Option deletion', function () {
+    Mail::fake();
+
+    $owner = Account::factory()->create();
+    $otherAccount = Account::factory()->create();
+    $sheet = Sheet::factory()->for($owner, 'owner')->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'selection_maximum' => 2,
+    ]);
+    $target = $sheet->options()->create([
+        'name' => 'Private target',
+        'capacity' => 2,
+        'claimed_count' => 1,
+        'position' => 1,
+    ]);
+    $retained = $sheet->options()->create([
+        'name' => 'Retained Option',
+        'capacity' => 2,
+        'claimed_count' => 1,
+        'position' => 2,
+    ]);
+    $signup = $sheet->signups()->create([
+        'name_snapshot' => 'Private participant',
+        'email_snapshot' => 'private@example.test',
+        'phone_snapshot' => '555-0102',
+        'name_consent' => true,
+        'email_consent' => true,
+        'phone_consent' => true,
+    ]);
+    $claims = $signup->optionClaims()->createMany([
+        ['option_id' => $target->id],
+        ['option_id' => $retained->id],
+    ]);
+    $snapshotFields = [
+        'id',
+        'name_snapshot',
+        'email_snapshot',
+        'phone_snapshot',
+        'name_consent',
+        'email_consent',
+        'phone_consent',
+    ];
+    $signupSnapshot = $signup->refresh()->only($snapshotFields);
+    $optionState = collect([$target->refresh(), $retained->refresh()])
+        ->map(fn ($option): array => $option->only([
+            'id',
+            'name',
+            'capacity',
+            'claimed_count',
+            'position',
+        ]))
+        ->all();
+    $component = Livewire::actingAs($owner)
+        ->test('pages::sheets.edit', ['sheet' => $sheet])
+        ->call('requestOptionDeletion', $target->id)
+        ->assertSet('deletingOptionId', $target->id)
+        ->assertSet('deletingOptionClaimCount', 1);
+
+    $this->actingAs($otherAccount);
+
+    $component->call('confirmOptionDeletion')->assertNotFound();
+
+    expect($sheet->refresh()->selection_maximum)->toBe(2)
+        ->and(collect([$target->refresh(), $retained->refresh()])->map(
+            fn ($option): array => $option->only([
+                'id',
+                'name',
+                'capacity',
+                'claimed_count',
+                'position',
+            ]),
+        )->all())->toBe($optionState)
+        ->and(OptionClaim::query()->whereIn('id', $claims->pluck('id'))->count())->toBe(2)
+        ->and($signup->refresh()->only($snapshotFields))->toBe($signupSnapshot);
+    Mail::assertNothingQueued();
+});
+
+test('stale Published Option deletion confirmation fails safely', function () {
+    $owner = Account::factory()->create();
+    $sheet = Sheet::factory()->for($owner, 'owner')->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'selection_maximum' => 2,
+    ]);
+    $target = $sheet->options()->create([
+        'name' => 'Welcome table',
+        'capacity' => 2,
+        'claimed_count' => 1,
+        'position' => 1,
+    ]);
+    $retained = $sheet->options()->create([
+        'name' => 'Cleanup',
+        'capacity' => 2,
+        'position' => 2,
+    ]);
+    $signup = $sheet->signups()->create(['name_snapshot' => 'Participant']);
+    $claim = $signup->optionClaims()->create(['option_id' => $target->id]);
+
+    $component = Livewire::actingAs($owner)
+        ->test('pages::sheets.edit', ['sheet' => $sheet])
+        ->call('requestOptionDeletion', $target->id)
+        ->assertSet('deletingOptionId', $target->id)
+        ->assertSet('deletingOptionClaimCount', 1);
+
+    app(DeleteOwnerOption::class)->handle($owner, $sheet, $target->id);
+
+    $component
+        ->call('confirmOptionDeletion')
+        ->assertHasErrors(['optionDeletion'])
+        ->assertSee('This Option cannot be deleted.')
+        ->assertSet('deletingOptionId', null)
+        ->assertSet('deletingOptionClaimCount', 0)
+        ->assertSet('announcement', 'This Option cannot be deleted.')
+        ->assertSet('selectionMaximum', '1')
+        ->assertDontSee('Option deleted.');
+
+    expect(OptionClaim::query()->find($claim->id))->toBeNull()
+        ->and($sheet->options()->whereKey($retained->id)->exists())->toBeTrue()
+        ->and($sheet->refresh()->selection_maximum)->toBe(1);
 });
 
 test('Published capacity changes preserve claims and immediately govern new Signups', function () {

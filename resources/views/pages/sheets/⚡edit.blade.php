@@ -1,6 +1,8 @@
 <?php
 
+use App\Actions\DeleteOwnerOption;
 use App\Actions\DuplicateSheet;
+use App\Exceptions\CannotDeleteOwnerOption;
 use App\Models\Account;
 use App\Models\Sheet;
 use Illuminate\Support\Carbon;
@@ -49,6 +51,10 @@ new #[Title('Edit Signup Sheet')] class extends Component
     public string $editOptionDescription = '';
 
     public string $editOptionCapacity = '';
+
+    public ?int $deletingOptionId = null;
+
+    public int $deletingOptionClaimCount = 0;
 
     public function mount(Sheet $sheet): void
     {
@@ -166,6 +172,55 @@ new #[Title('Edit Signup Sheet')] class extends Component
             'editOptionCapacity',
         ]);
         $this->announcement = __('Option editing cancelled.');
+    }
+
+    public function requestOptionDeletion(int $optionId): void
+    {
+        $this->authorizeOwner();
+        abort_unless($this->sheet->state === Sheet::STATE_PUBLISHED, 404);
+
+        $option = $this->sheet->options()->findOrFail($optionId);
+
+        $this->deletingOptionId = $option->id;
+        $this->deletingOptionClaimCount = $option->optionClaims()->count();
+        $this->announcement = __('Option deletion confirmation requested.');
+    }
+
+    public function cancelOptionDeletion(): void
+    {
+        $this->authorizeOwner();
+        $this->reset('deletingOptionId', 'deletingOptionClaimCount');
+        $this->announcement = __('Option deletion cancelled.');
+    }
+
+    public function confirmOptionDeletion(DeleteOwnerOption $deleteOwnerOption): void
+    {
+        $this->authorizeOwner();
+        abort_unless($this->sheet->state === Sheet::STATE_PUBLISHED, 404);
+        abort_if($this->deletingOptionId === null, 404);
+
+        $owner = Auth::user();
+
+        abort_unless($owner instanceof Account, 403);
+
+        $optionId = $this->deletingOptionId;
+
+        try {
+            $deleteOwnerOption->handle($owner, $this->sheet, $optionId);
+        } catch (CannotDeleteOwnerOption $exception) {
+            $this->sheet->refresh();
+            $this->selectionMaximum = (string) $this->sheet->selection_maximum;
+            $this->reset('deletingOptionId', 'deletingOptionClaimCount');
+            $this->addError('optionDeletion', $exception->getMessage());
+            $this->announcement = $exception->getMessage();
+
+            return;
+        }
+
+        $this->sheet->refresh();
+        $this->selectionMaximum = (string) $this->sheet->selection_maximum;
+        $this->reset('deletingOptionId', 'deletingOptionClaimCount');
+        $this->announcement = __('Option deleted.');
     }
 
     public function removeOption(int $optionId): void
@@ -680,9 +735,25 @@ new #[Title('Edit Signup Sheet')] class extends Component
                                     <x-ui.button wire:click="startEditingOption({{ $option->id }})" variant="outline" size="sm">{{ __('Edit') }}</x-ui.button>
                                     @if ($sheet->state === Sheet::STATE_DRAFT)
                                         <x-ui.button wire:click="removeOption({{ $option->id }})" wire:confirm="{{ __('Remove this Option?') }}" variant="danger" size="sm">{{ __('Remove') }}</x-ui.button>
+                                    @elseif ($sheet->state === Sheet::STATE_PUBLISHED)
+                                        <x-ui.button wire:click="requestOptionDeletion({{ $option->id }})" variant="danger" size="sm">{{ __('Delete') }}</x-ui.button>
                                     @endif
                                 </div>
                             </div>
+                            @if ($deletingOptionId === $option->id)
+                                <x-ui.callout class="mt-4" variant="danger" :heading="__('Delete :name?', ['name' => $option->name])">
+                                    <p>{{ trans_choice(
+                                        'This will remove :count Option Claim.|This will remove :count Option Claims.',
+                                        $deletingOptionClaimCount,
+                                        ['count' => $deletingOptionClaimCount],
+                                    ) }}</p>
+                                    <p class="mt-1">{{ __('This cannot be undone.') }}</p>
+                                    <div class="mt-4 flex flex-wrap gap-2">
+                                        <x-ui.button wire:click="confirmOptionDeletion" variant="danger" size="sm">{{ __('Delete Option') }}</x-ui.button>
+                                        <x-ui.button wire:click="cancelOptionDeletion" variant="outline" size="sm">{{ __('Cancel') }}</x-ui.button>
+                                    </div>
+                                </x-ui.callout>
+                            @endif
                         @endif
                     </li>
                 @endforeach
