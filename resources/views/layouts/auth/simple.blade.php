@@ -19,6 +19,8 @@
             </div>
         </main>
 
+        <x-site-footer />
+
         @livewireScripts
     </body>
 </html>

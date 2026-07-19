@@ -47,10 +47,11 @@
                 </div>
             </aside>
 
-            <div class="min-w-0 flex-1">
+            <div class="flex min-h-svh min-w-0 flex-1 flex-col">
                 <a href="#main-content" class="sr-only z-[60] rounded-lg bg-white px-4 py-3 font-semibold focus:not-sr-only focus:fixed focus:start-4 focus:top-4 focus:ring-2 focus:ring-teal-600 dark:bg-stone-900">{{ __('Skip to content') }}</a>
                 <x-ui.flash class="m-4 lg:mx-10 lg:mt-6" />
                 {{ $slot }}
+                <x-site-footer class="mt-auto" />
             </div>
         </div>
 

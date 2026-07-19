@@ -71,6 +71,8 @@
             </main>
         </div>
 
+        <x-site-footer />
+
         @livewireScripts
     </body>
 </html>

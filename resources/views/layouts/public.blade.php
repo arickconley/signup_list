@@ -11,6 +11,7 @@
     </head>
     <body class="min-h-svh overflow-x-hidden bg-stone-100 text-stone-950 dark:bg-stone-950 dark:text-stone-50">
         {{ $slot }}
+        <x-site-footer />
         @if ($includeLivewire)
             @livewireScripts
         @endif

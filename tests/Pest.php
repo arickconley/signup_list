@@ -47,7 +47,43 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+function configureReadyProduction(string $databasePath = '/srv/signup/database/database.sqlite'): void
 {
-    // ..
+    $sourceRef = '0123456789abcdef0123456789abcdef01234567';
+
+    config([
+        'app.env' => 'production',
+        'app.debug' => false,
+        'app.url' => 'https://signup.example',
+        'session.secure' => true,
+        'deployment.https.termination' => 'direct',
+        'deployment.https.trusted_proxies' => [],
+        'database.default' => 'sqlite',
+        'database.connections.sqlite.database' => $databasePath,
+        'deployment.persistent_disk_path' => '/srv/signup',
+        'queue.default' => 'database',
+        'session.driver' => 'database',
+        'cache.default' => 'database',
+        'deployment.processes.web' => 1,
+        'deployment.processes.queue' => 1,
+        'deployment.processes.scheduler' => 1,
+        'deployment.scheduler.heartbeat_path' => '/srv/signup/scheduler-heartbeat.json',
+        'deployment.scheduler.heartbeat_max_age_minutes' => 5,
+        'deployment.mail.provider' => 'human-selected-provider',
+        'deployment.mail.sender_domain' => 'signup.example',
+        'deployment.mail.smoke_to' => 'operator@example.net',
+        'mail.default' => 'smtp',
+        'mail.from.address' => 'notices@signup.example',
+        'deployment.backup.destination' => '/mnt/human-selected-backups',
+        'deployment.backup.age_recipient' => 'human-selected-age-recipient',
+        'deployment.backup.schedule' => '15 3 * * *',
+        'deployment.backup.retention_days' => 30,
+        'deployment.backup.restore_evidence_path' => '/srv/signup/restore-evidence.json',
+        'deployment.backup.restore_max_age_days' => 90,
+        'deployment.disposable_email_domains.source_url' => 'https://blocklist.example/domains.txt',
+        'deployment.disposable_email_domains.update_schedule' => '30 3 * * 1',
+        'deployment.source.ref' => $sourceRef,
+        'deployment.source.url' => "https://code.example/signup/tree/{$sourceRef}",
+        'deployment.source.license_url' => "https://code.example/signup/blob/{$sourceRef}/LICENSE",
+    ]);
 }

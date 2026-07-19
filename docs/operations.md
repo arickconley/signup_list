@@ -1,5 +1,20 @@
 # Operations
 
+## Production configuration and smoke check
+
+Set the production values in `.env` (HTTPS `APP_URL`, secure cookies, generated `APP_KEY`, mounted `PERSISTENT_DISK_PATH`, and exactly one web, queue, and scheduler process). Choose the mail provider, sender domain/DNS records, smoke destination, disposable-domain blocklist source/cadence, encrypted backup destination/recipient/schedule/retention, and restore-evidence path. These are human deployment decisions; this repository supplies validation only and never performs DNS, provisioning, or deployment.
+
+Validate without changing application data:
+
+```sh
+php artisan app:production-check
+php artisan app:production-smoke
+```
+
+The smoke check verifies the live HTTPS response discloses the exact deployed source ref, AGPL license, and no-warranty notice; opens the persistent SQLite database; queues a mail test; checks the scheduler heartbeat; and validates operator-written encrypted restore evidence. It does not send mail synchronously, mutate domain data, restore backups, or select providers.
+
+Backups must be encrypted with the human-selected recipient, retained for the configured period, and periodically restored into an isolated location. Record the restore timestamp, backup name, SHA-256, encryption status, and SQLite integrity result at `BACKUP_RESTORE_EVIDENCE_PATH` for the smoke check. Configure provider DNS (SPF, DKIM, DMARC) and verify the selected sender domain before enabling production mail.
+
 Production supports one application instance and one persistent SQLite database. The web process, scheduler, and queue worker must mount the same database file. Keep these defaults unless the deployment architecture changes:
 
 ```dotenv
