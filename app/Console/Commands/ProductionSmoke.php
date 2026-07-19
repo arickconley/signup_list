@@ -5,10 +5,12 @@ namespace App\Console\Commands;
 use App\Mail\ProductionSmokeMail;
 use App\Support\ProductionConfiguration;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 
 final class ProductionSmoke extends Command
 {
@@ -54,12 +56,39 @@ final class ProductionSmoke extends Command
 
     private function database(): bool
     {
-        try {
-            $statement = DB::connection()->getPdo()->query('SELECT 1');
+        $connectionName = (string) config('database.default');
+        $probeTable = 'production_smoke_'.Str::lower(Str::random(16));
+        $probeValue = (string) Str::uuid();
+        $probeCreated = false;
 
-            return $statement !== false && $statement->fetchColumn() === 1;
+        try {
+            $connection = DB::connection($connectionName);
+
+            if ($connection->getDriverName() !== 'sqlite') {
+                return false;
+            }
+
+            $connection->statement("CREATE TABLE \"{$probeTable}\" (value TEXT NOT NULL)");
+            $probeCreated = true;
+            $connection->table($probeTable)->insert(['value' => $probeValue]);
+
+            DB::purge($connectionName);
+
+            return DB::connection($connectionName)
+                ->table($probeTable)
+                ->where('value', $probeValue)
+                ->exists();
         } catch (\Throwable) {
             return false;
+        } finally {
+            if ($probeCreated) {
+                try {
+                    DB::connection($connectionName)
+                        ->statement("DROP TABLE IF EXISTS \"{$probeTable}\"");
+                } catch (\Throwable) {
+                    // The failed reopen is already reported by the smoke result.
+                }
+            }
         }
     }
 
@@ -78,7 +107,26 @@ final class ProductionSmoke extends Command
     {
         $path = (string) config('deployment.scheduler.heartbeat_path');
 
-        return is_file($path) && filemtime($path) >= now()->subMinutes((int) config('deployment.scheduler.heartbeat_max_age_minutes'))->timestamp;
+        if (! is_file($path)) {
+            return false;
+        }
+
+        $evidence = json_decode((string) File::get($path), true);
+
+        if (! is_array($evidence) || ! is_string($evidence['recorded_at'] ?? null)) {
+            return false;
+        }
+
+        try {
+            $recordedAt = Date::parse($evidence['recorded_at']);
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return $recordedAt->betweenIncluded(
+            now()->subMinutes((int) config('deployment.scheduler.heartbeat_max_age_minutes')),
+            now(),
+        );
     }
 
     private function restoreEvidence(): bool
@@ -89,7 +137,25 @@ final class ProductionSmoke extends Command
         }
         $evidence = json_decode((string) File::get($path), true);
 
-        return is_array($evidence) && ($evidence['integrity_check'] ?? null) === 'ok' && ($evidence['encrypted'] ?? false) === true
-            && isset($evidence['restored_at'], $evidence['sha256']);
+        if (! is_array($evidence)
+            || ($evidence['integrity_check'] ?? null) !== 'ok'
+            || ($evidence['encrypted'] ?? false) !== true
+            || ! is_string($evidence['restored_at'] ?? null)
+            || ! is_string($evidence['sha256'] ?? null)
+            || preg_match('/\A[0-9a-f]{64}\z/i', $evidence['sha256']) !== 1
+        ) {
+            return false;
+        }
+
+        try {
+            $restoredAt = Date::parse($evidence['restored_at']);
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return $restoredAt->betweenIncluded(
+            now()->subDays((int) config('deployment.backup.restore_max_age_days')),
+            now(),
+        );
     }
 }

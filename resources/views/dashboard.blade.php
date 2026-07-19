@@ -6,9 +6,11 @@
                 <h1 class="mt-2 font-display text-4xl font-semibold tracking-tight">{{ __('Signup sheets') }}</h1>
                 <p class="mt-2 max-w-xl text-stone-600 dark:text-stone-400">{{ __('Create a Signup Sheet, send its shareable link, and keep every contribution organized.') }}</p>
             </div>
-            <a href="{{ route('sheets.create') }}" wire:navigate class="inline-flex min-h-11 items-center justify-center rounded-lg bg-teal-700 px-4 text-sm font-semibold text-white shadow-sm hover:bg-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2 dark:bg-teal-500 dark:text-stone-950 dark:hover:bg-teal-400">
-                {{ __('Create a signup sheet') }}
-            </a>
+            @if ($canCreateSheets)
+                <a href="{{ route('sheets.create') }}" wire:navigate class="inline-flex min-h-11 items-center justify-center rounded-lg bg-teal-700 px-4 text-sm font-semibold text-white shadow-sm hover:bg-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2 dark:bg-teal-500 dark:text-stone-950 dark:hover:bg-teal-400">
+                    {{ __('Create a signup sheet') }}
+                </a>
+            @endif
         </div>
 
         @if ($drafts->isEmpty() && $openSheets->isEmpty() && $closedSheets->isEmpty() && $archivedSheets->isEmpty())
@@ -26,7 +28,7 @@
                 <h2 id="draft-sheets-title" class="font-display text-2xl font-semibold">{{ __('Draft Sheets') }}</h2>
                 <div class="mt-4 grid gap-4 sm:grid-cols-2">
                     @foreach ($drafts as $draft)
-                        <x-dashboard.owned-sheet-card :sheet="$draft" lifecycle="draft" />
+                        <x-dashboard.owned-sheet-card :sheet="$draft" lifecycle="draft" :$canCreateSheets />
                     @endforeach
                 </div>
             </section>
@@ -37,7 +39,7 @@
                 <h2 id="open-sheets-title" class="font-display text-2xl font-semibold">{{ __('Open Signup Sheets') }}</h2>
                 <div class="mt-4 grid gap-4 sm:grid-cols-2">
                     @foreach ($openSheets as $openSheet)
-                        <x-dashboard.owned-sheet-card :sheet="$openSheet" lifecycle="open" />
+                        <x-dashboard.owned-sheet-card :sheet="$openSheet" lifecycle="open" :$canCreateSheets />
                     @endforeach
                 </div>
             </section>
@@ -48,7 +50,7 @@
                 <h2 id="closed-sheets-title" class="font-display text-2xl font-semibold">{{ __('Closed Signup Sheets') }}</h2>
                 <div class="mt-4 grid gap-4 sm:grid-cols-2">
                     @foreach ($closedSheets as $closedSheet)
-                        <x-dashboard.owned-sheet-card :sheet="$closedSheet" lifecycle="closed" />
+                        <x-dashboard.owned-sheet-card :sheet="$closedSheet" lifecycle="closed" :$canCreateSheets />
                     @endforeach
                 </div>
             </section>
@@ -59,7 +61,7 @@
                 <h2 id="archived-sheets-title" class="font-display text-2xl font-semibold">{{ __('Archived Signup Sheets') }}</h2>
                 <div class="mt-4 grid gap-4 sm:grid-cols-2">
                     @foreach ($archivedSheets as $archivedSheet)
-                        <x-dashboard.owned-sheet-card :sheet="$archivedSheet" lifecycle="archived" />
+                        <x-dashboard.owned-sheet-card :sheet="$archivedSheet" lifecycle="archived" :$canCreateSheets />
                     @endforeach
                 </div>
             </section>

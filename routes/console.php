@@ -67,3 +67,8 @@ Schedule::command('app:cleanup-expired')
     ->dailyAt('02:00')
     ->onOneServer()
     ->withoutOverlapping();
+
+Schedule::command('app:scheduler-heartbeat')
+    ->everyMinute()
+    ->onOneServer()
+    ->withoutOverlapping();

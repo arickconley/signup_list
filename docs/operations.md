@@ -11,7 +11,7 @@ php artisan app:production-check
 php artisan app:production-smoke
 ```
 
-The smoke check verifies the live HTTPS response discloses the exact deployed source ref, AGPL license, and no-warranty notice; opens the persistent SQLite database; queues a mail test; checks the scheduler heartbeat; and validates operator-written encrypted restore evidence. It does not send mail synchronously, mutate domain data, restore backups, or select providers.
+The smoke check verifies the live HTTPS response discloses the exact deployed source ref, AGPL license, and no-warranty notice; writes a disposable SQLite probe, reopens the connection, verifies the probe, and removes it; queues a mail test; checks the scheduler heartbeat; and validates fresh operator-written encrypted restore evidence. It does not send mail synchronously, mutate domain data, restore backups, or select providers.
 
 Backups must be encrypted with the human-selected recipient, retained for the configured period, and periodically restored into an isolated location. Record the restore timestamp, backup name, SHA-256, encryption status, and SQLite integrity result at `BACKUP_RESTORE_EVIDENCE_PATH` for the smoke check. Configure provider DNS (SPF, DKIM, DMARC) and verify the selected sender domain before enabling production mail.
 
@@ -35,6 +35,8 @@ php artisan schedule:work
 ```
 
 A cron alternative is `php artisan schedule:run` every minute. Cleanup runs daily at 02:00 in the application timezone, uses the database cache lock for `onOneServer`, and prevents overlapping runs.
+
+The scheduled `app:scheduler-heartbeat` command runs every minute and atomically records its timestamp at `SCHEDULER_HEARTBEAT_PATH`. The production smoke check requires that recorded timestamp to be recent; a touched or malformed file is not sufficient evidence.
 
 Manual cleanup is safe and rerunnable:
 

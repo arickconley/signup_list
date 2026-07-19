@@ -2,9 +2,11 @@
 
 use App\Http\Middleware\EnsureAccountHasPassword;
 use App\Http\Middleware\EnsureAccountProfileIsComplete;
+use App\Http\Middleware\TrustDeploymentProxies;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Http\Request;
 use Laravel\Passkeys\Exceptions\InvalidPasskeyException;
 use Webauthn\Exception\WebauthnException;
@@ -16,6 +18,8 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->replace(TrustProxies::class, TrustDeploymentProxies::class);
+
         $middleware->alias([
             'account.password' => EnsureAccountHasPassword::class,
             'profile.complete' => EnsureAccountProfileIsComplete::class,

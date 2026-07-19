@@ -1,4 +1,4 @@
-@props(['sheet', 'lifecycle'])
+@props(['sheet', 'lifecycle', 'canCreateSheets'])
 
 @php
     $editUrl = route('sheets.edit', $sheet, absolute: false);
@@ -40,7 +40,9 @@
             <x-ui.link class="inline-flex min-h-11 items-center" :href="$managementUrl">{{ __('Archive Sheet') }}</x-ui.link>
         @endif
 
-        <x-ui.link class="inline-flex min-h-11 items-center" :href="$duplicateUrl">{{ __('Duplicate Sheet') }}</x-ui.link>
+        @if ($canCreateSheets)
+            <x-ui.link class="inline-flex min-h-11 items-center" :href="$duplicateUrl">{{ __('Duplicate Sheet') }}</x-ui.link>
+        @endif
 
         @if (in_array($lifecycle, ['open', 'closed', 'archived'], true))
             <x-ui.link class="inline-flex min-h-11 items-center" :href="route('sheets.signups.print', $sheet, absolute: false)">{{ __('Print Signups') }}</x-ui.link>

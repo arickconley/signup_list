@@ -140,6 +140,23 @@ test('Owner dashboard exposes only actions valid for each Signup Sheet lifecycle
     ]);
 });
 
+test('Account dashboard hides Owner creation actions when the Account is ineligible', function () {
+    $account = Account::factory()->create([
+        'email' => 'owner@10minutemail.com',
+    ]);
+    $sheet = Sheet::factory()->for($account, 'owner')->create([
+        'title' => 'Existing blocked-domain Sheet',
+        'state' => Sheet::STATE_DRAFT,
+    ]);
+
+    $this->actingAs($account)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertSee($sheet->title)
+        ->assertDontSeeHtml('href="'.route('sheets.create').'"')
+        ->assertDontSee('Duplicate Sheet');
+});
+
 test('Account dashboard is unindexable and never leaks another Accounts Sheet data', function () {
     $account = Account::factory()->create();
     $otherAccount = Account::factory()->create();
