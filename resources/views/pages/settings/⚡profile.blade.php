@@ -95,7 +95,7 @@ new #[Title('Profile settings')] class extends Component
     }
 
     #[Computed]
-    public function showDeleteUser(): bool
+    public function showDeleteAccount(): bool
     {
         return ! Auth::user() instanceof MustVerifyEmail
             || (Auth::user() instanceof MustVerifyEmail && Auth::user()->hasVerifiedEmail());
@@ -190,8 +190,8 @@ new #[Title('Profile settings')] class extends Component
             <x-ui.flash />
         </form>
 
-        @if ($this->showDeleteUser)
-            <livewire:pages::settings.delete-user-form />
+        @if ($this->showDeleteAccount)
+            <livewire:pages::settings.delete-account-form />
         @endif
     </x-pages::settings.layout>
 </section>

@@ -35,7 +35,7 @@ test('deletion confirmation reports accurate Signup Sheet lifecycle counts', fun
 
     $this->actingAs($account);
 
-    Livewire::test('pages::settings.delete-user-modal')
+    Livewire::test('pages::settings.delete-account-modal')
         ->call('beginDeletion')
         ->assertSet('sheetCounts', [
             'draft' => 2,
@@ -78,7 +78,7 @@ test('lifecycle counts use one authoritative instant across all categories', fun
 
     $this->actingAs($account);
 
-    Livewire::test('pages::settings.delete-user-modal')
+    Livewire::test('pages::settings.delete-account-modal')
         ->call('beginDeletion')
         ->assertSet('sheetCounts.open', 1)
         ->assertSet('sheetCounts.closed', 0);
@@ -90,10 +90,10 @@ test('deletion requires new email verification even during a freshly confirmed s
     $this->actingAs($account)
         ->withSession(['auth.password_confirmed_at' => now()->timestamp]);
 
-    Livewire::test('pages::settings.delete-user-modal')
+    Livewire::test('pages::settings.delete-account-modal')
         ->call('beginDeletion')
         ->set('password', 'password')
-        ->call('deleteUser')
+        ->call('deleteAccount')
         ->assertHasErrors(['verification']);
 
     expect($account->fresh())->not->toBeNull()
@@ -105,7 +105,7 @@ test('Account establishes fresh deletion proof with a newly emailed code', funct
     $account = Account::factory()->passwordless()->create();
     $this->actingAs($account);
 
-    $component = Livewire::test('pages::settings.delete-user-modal')
+    $component = Livewire::test('pages::settings.delete-account-modal')
         ->call('beginDeletion')
         ->call('sendDeletionVerification');
 
@@ -129,7 +129,7 @@ test('deletion proof cannot cross an Account email change', function () {
     $account = Account::factory()->create(['email' => 'before@example.test']);
     $this->actingAs($account);
 
-    $component = Livewire::test('pages::settings.delete-user-modal')
+    $component = Livewire::test('pages::settings.delete-account-modal')
         ->call('beginDeletion')
         ->call('sendDeletionVerification');
 
@@ -153,7 +153,7 @@ test('fresh deletion proof becomes invalid if the Account email changes afterwar
     $account = Account::factory()->create(['email' => 'verified-before@example.test']);
     $this->actingAs($account);
 
-    $component = Livewire::test('pages::settings.delete-user-modal')
+    $component = Livewire::test('pages::settings.delete-account-modal')
         ->call('beginDeletion')
         ->call('sendDeletionVerification');
 
@@ -169,7 +169,7 @@ test('fresh deletion proof becomes invalid if the Account email changes afterwar
     $component
         ->set('password', 'password')
         ->set('confirmation', 'DELETE')
-        ->call('deleteUser')
+        ->call('deleteAccount')
         ->assertHasErrors(['verification']);
 
     expect($account->fresh())->not->toBeNull();
@@ -180,7 +180,7 @@ test('freshly verified deletion still requires the explicit irreversible phrase'
     $account = Account::factory()->create();
     $this->actingAs($account);
 
-    $component = Livewire::test('pages::settings.delete-user-modal')
+    $component = Livewire::test('pages::settings.delete-account-modal')
         ->call('beginDeletion')
         ->call('sendDeletionVerification');
 
@@ -192,7 +192,7 @@ test('freshly verified deletion still requires the explicit irreversible phrase'
         ->call('verifyDeletionEmail')
         ->set('password', 'password')
         ->set('confirmation', 'delete')
-        ->call('deleteUser')
+        ->call('deleteAccount')
         ->assertHasErrors(['confirmation']);
 
     expect($account->fresh())->not->toBeNull()
@@ -204,7 +204,7 @@ test('deletion email verification is stale at the challenge expiry boundary', fu
     $account = Account::factory()->create();
     $this->actingAs($account);
 
-    $component = Livewire::test('pages::settings.delete-user-modal')
+    $component = Livewire::test('pages::settings.delete-account-modal')
         ->call('beginDeletion')
         ->call('sendDeletionVerification');
 
@@ -220,7 +220,7 @@ test('deletion email verification is stale at the challenge expiry boundary', fu
     $component
         ->set('password', 'password')
         ->set('confirmation', 'DELETE')
-        ->call('deleteUser')
+        ->call('deleteAccount')
         ->assertHasErrors(['verification']);
 
     expect($account->fresh())->not->toBeNull();
@@ -231,7 +231,7 @@ test('cancelling deletion clears proof and leaves the Account unchanged', functi
     $account = Account::factory()->create();
     $this->actingAs($account);
 
-    $component = Livewire::test('pages::settings.delete-user-modal')
+    $component = Livewire::test('pages::settings.delete-account-modal')
         ->call('beginDeletion')
         ->call('sendDeletionVerification');
 
@@ -257,7 +257,7 @@ test('opening a new deletion attempt clears any prior explicit confirmation', fu
     $account = Account::factory()->create();
     $this->actingAs($account);
 
-    Livewire::test('pages::settings.delete-user-modal')
+    Livewire::test('pages::settings.delete-account-modal')
         ->set('password', 'password')
         ->set('confirmation', 'DELETE')
         ->call('beginDeletion')
@@ -273,7 +273,7 @@ test('changed Sheet counts refresh the confirmation without deleting anything', 
     ]);
     $this->actingAs($account);
 
-    $component = Livewire::test('pages::settings.delete-user-modal')
+    $component = Livewire::test('pages::settings.delete-account-modal')
         ->call('beginDeletion')
         ->assertSet('sheetCounts.archived', 0);
 
@@ -291,7 +291,7 @@ test('changed Sheet counts refresh the confirmation without deleting anything', 
         ->call('verifyDeletionEmail')
         ->set('password', 'password')
         ->set('confirmation', 'DELETE')
-        ->call('deleteUser')
+        ->call('deleteAccount')
         ->assertHasErrors(['deletion'])
         ->assertSet('sheetCounts.archived', 1)
         ->assertSet('confirmation', '');
@@ -339,7 +339,7 @@ test('passwordless Account completes verified deletion and owned UUID becomes ge
 
     $this->actingAs($account);
 
-    $component = Livewire::test('pages::settings.delete-user-modal')
+    $component = Livewire::test('pages::settings.delete-account-modal')
         ->call('beginDeletion')
         ->call('sendDeletionVerification');
 
@@ -350,7 +350,7 @@ test('passwordless Account completes verified deletion and owned UUID becomes ge
         ->set('verificationCode', $mail->code)
         ->call('verifyDeletionEmail')
         ->set('confirmation', 'DELETE')
-        ->call('deleteUser')
+        ->call('deleteAccount')
         ->assertHasNoErrors()
         ->assertRedirect('/');
 

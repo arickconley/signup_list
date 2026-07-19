@@ -187,10 +187,10 @@ test('password Account still requires its correct password after fresh email ver
         'account_deletion_email_verified_at' => now()->timestamp,
     ]);
 
-    $response = Livewire::test('pages::settings.delete-user-modal')
+    $response = Livewire::test('pages::settings.delete-account-modal')
         ->set('password', 'wrong-password')
         ->set('confirmation', 'DELETE')
-        ->call('deleteUser');
+        ->call('deleteAccount');
 
     $response->assertHasErrors(['password']);
 

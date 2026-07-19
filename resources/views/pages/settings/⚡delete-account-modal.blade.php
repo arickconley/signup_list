@@ -133,7 +133,7 @@ new class extends Component {
         ]);
     }
 
-    public function deleteUser(DeleteAccount $deleteAccount, Logout $logout): void
+    public function deleteAccount(DeleteAccount $deleteAccount, Logout $logout): void
     {
         /** @var Account $account */
         $account = Auth::user();
@@ -195,7 +195,7 @@ new class extends Component {
     aria-labelledby="delete-account-title"
 >
     <div class="w-full rounded-2xl border border-stone-200 bg-white p-6 shadow-2xl dark:border-stone-700 dark:bg-stone-900">
-        <form wire:submit="deleteUser" class="space-y-6">
+        <form wire:submit="deleteAccount" class="space-y-6">
             <div>
                 <h2 id="delete-account-title" class="font-display text-2xl font-semibold">{{ __('Are you sure you want to delete your account?') }}</h2>
                 <p class="mt-2 text-sm leading-6 text-stone-600 dark:text-stone-400">{{ __('Owned Signup Sheets will be permanently deleted. Signups on other Owners’ Sheets will remain without your identity. Verify your email, review the counts, and explicitly confirm below.') }}</p>
@@ -248,7 +248,7 @@ new class extends Component {
 
             <div class="flex justify-end gap-2">
                 <x-ui.button variant="filled" wire:click="cancelDeletion" x-on:click="$refs.dialog.close()">{{ __('Cancel') }}</x-ui.button>
-                <x-ui.button variant="danger" type="submit" data-test="confirm-delete-user-button">{{ __('Delete account') }}</x-ui.button>
+                <x-ui.button variant="danger" type="submit" data-test="confirm-delete-account-button">{{ __('Delete account') }}</x-ui.button>
             </div>
         </form>
     </div>
