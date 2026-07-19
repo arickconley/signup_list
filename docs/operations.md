@@ -83,7 +83,7 @@ Application logs use stable event names with structured context:
 | `mail.dispatch_failed` | error | A Signup access message could not be queued |
 | `sqlite.lock_retry` | warning | A bounded SQLite lock retry will occur |
 | `sqlite.lock_failed` | error | SQLite stayed locked through all retries |
-| `signup.throttled` | warning | A duplicate Signup access message was rate-limited |
+| `signup.throttled` | warning | A Signup submission or duplicate access message was rate-limited |
 | `signup.owner_removal` | info | Owner removal type and affected Signup/Option Claim volume |
 
 Alert immediately on `queue.job_failed`, `mail.job_failed`, or `sqlite.lock_failed`. Investigate repeated `sqlite.lock_retry` events (for example, five in five minutes), sustained `signup.throttled` spikes, unusual Owner-removal volume, cleanup failures, or cleanup counts repeatedly reaching the configured limit. Avoid alerting on a single normal throttle or removal event.

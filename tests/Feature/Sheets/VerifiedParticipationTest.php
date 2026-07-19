@@ -6,9 +6,11 @@ use App\Exceptions\CannotCompleteSignup;
 use App\Http\Controllers\AccountAccessController;
 use App\Mail\AccountAccessMail;
 use App\Models\Account;
+use App\Models\OptionClaim;
 use App\Models\PendingAccountAssociation;
 use App\Models\Sheet;
 use App\Models\Signup;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Livewire;
 
@@ -228,6 +230,58 @@ test('Verified Signup attempts are throttled independently per Sheet and Account
         ->set('selectedOptions', [$otherOption->public_id])
         ->call('complete')
         ->assertHasNoErrors();
+});
+
+test('Verified Participation Signup throttle emits one privacy-safe structured warning without side effects', function () {
+    Mail::fake();
+    $account = Account::factory()->create([
+        'name' => 'Private Participant',
+        'email' => 'private@example.test',
+        'phone' => '555-0199',
+    ]);
+    $sheet = Sheet::factory()->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_VERIFIED,
+        'selection_maximum' => 1,
+    ]);
+    $option = $sheet->options()->create([
+        'name' => 'Popular table',
+        'capacity' => 2,
+        'position' => 1,
+    ]);
+    $component = Livewire::actingAs($account)
+        ->test('complete-verified-signup', ['sheetPublicId' => $sheet->public_id])
+        ->set('selectedOptions', [$option->public_id]);
+
+    foreach (range(1, 5) as $attempt) {
+        $component
+            ->call('complete')
+            ->assertHasNoErrors();
+    }
+
+    $accountCount = Account::query()->count();
+    $signupCount = Signup::query()->count();
+    $claimCount = OptionClaim::query()->count();
+    Log::spy();
+
+    $component
+        ->call('complete')
+        ->assertHasErrors(['signup'])
+        ->assertSet('announcement', 'Too many signup attempts. Please wait a minute and try again.')
+        ->assertSee('Too many signup attempts');
+
+    Log::shouldHaveReceived('warning')
+        ->with('signup.throttled', [
+            'operation' => 'submission',
+            'participation_policy' => Sheet::PARTICIPATION_VERIFIED,
+            'sheet_public_id' => $sheet->public_id,
+        ])
+        ->once();
+    expect(Account::query()->count())->toBe($accountCount)
+        ->and(Signup::query()->count())->toBe($signupCount)
+        ->and(OptionClaim::query()->count())->toBe($claimCount)
+        ->and($option->refresh()->claimed_count)->toBe(1);
+    Mail::assertNothingQueued();
 });
 
 test('Returning verified Participant reaches its existing Signup instead of a duplicate form', function () {

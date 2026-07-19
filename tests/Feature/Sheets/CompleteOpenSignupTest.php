@@ -7,6 +7,8 @@ use App\Models\Signup;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Livewire\Livewire;
 
 test('Sheet lifecycle predicates honor manual state and the exact deadline boundary', function (
@@ -550,6 +552,56 @@ test('Signup attempts are throttled independently per Sheet and IP', function ()
 
     expect($option->refresh()->claimed_count)->toBe(6)
         ->and($otherOption->refresh()->claimed_count)->toBe(1);
+});
+
+test('Open Participation Signup throttle emits one privacy-safe structured warning without side effects', function () {
+    Mail::fake();
+    $sheet = Sheet::factory()->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_OPEN,
+        'selection_maximum' => 1,
+    ]);
+    $option = $sheet->options()->create([
+        'name' => 'Popular table',
+        'capacity' => 10,
+        'position' => 1,
+    ]);
+
+    foreach (range(1, 5) as $attempt) {
+        Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
+            ->set('name', 'Participant '.$attempt)
+            ->set('selectedOptions', [$option->public_id])
+            ->call('complete')
+            ->assertHasNoErrors();
+    }
+
+    $accountCount = Account::query()->count();
+    $signupCount = Signup::query()->count();
+    $claimCount = OptionClaim::query()->count();
+    Log::spy();
+
+    Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
+        ->set('name', 'Private Participant')
+        ->set('email', 'private@example.test')
+        ->set('phone', '555-0199')
+        ->set('selectedOptions', [$option->public_id])
+        ->call('complete')
+        ->assertHasErrors(['signup'])
+        ->assertSet('announcement', 'Too many signup attempts. Please wait a minute and try again.')
+        ->assertSee('Too many signup attempts');
+
+    Log::shouldHaveReceived('warning')
+        ->with('signup.throttled', [
+            'operation' => 'submission',
+            'participation_policy' => Sheet::PARTICIPATION_OPEN,
+            'sheet_public_id' => $sheet->public_id,
+        ])
+        ->once();
+    expect(Account::query()->count())->toBe($accountCount)
+        ->and(Signup::query()->count())->toBe($signupCount)
+        ->and(OptionClaim::query()->count())->toBe($claimCount)
+        ->and($option->refresh()->claimed_count)->toBe(5);
+    Mail::assertNothingQueued();
 });
 
 test('Livewire Signup endpoint requires CSRF protection', function () {

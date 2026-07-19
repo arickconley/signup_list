@@ -12,6 +12,7 @@ use App\Models\OptionClaim;
 use App\Models\Sheet;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
@@ -127,6 +128,12 @@ class CompleteVerifiedSignup extends Component
         $rateLimitKey = 'signup:'.$this->sheetPublicId.'|account:'.$account->id;
 
         if (RateLimiter::tooManyAttempts($rateLimitKey, 5)) {
+            Log::warning('signup.throttled', [
+                'operation' => 'submission',
+                'participation_policy' => Sheet::PARTICIPATION_VERIFIED,
+                'sheet_public_id' => $this->sheetPublicId,
+            ]);
+
             $message = __('Too many signup attempts. Please wait a minute and try again.');
             $this->addError('signup', $message);
             $this->announcement = $message;
