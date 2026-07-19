@@ -17,6 +17,7 @@ final class CompleteVerifiedSignup
 {
     public function __construct(
         private readonly ImmediateDatabaseTransaction $immediateTransaction,
+        private readonly AttachPendingAccountAssociations $attachPendingAccountAssociations,
     ) {}
 
     public function handle(Account $account, CompleteSignupInput $input): CompleteSignupResult
@@ -68,10 +69,7 @@ final class CompleteVerifiedSignup
             throw new CannotCompleteSignup('This Signup Sheet is no longer open for Verified Participation.');
         }
 
-        $existingSignup = Signup::query()
-            ->where('sheet_id', $sheet->id)
-            ->where('account_id', $account->id)
-            ->first();
+        $existingSignup = $this->attachPendingAccountAssociations->handleForSheet($account, $sheet);
 
         if ($existingSignup !== null) {
             return $existingSignup;

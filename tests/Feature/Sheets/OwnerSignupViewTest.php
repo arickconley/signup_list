@@ -82,6 +82,31 @@ test('Owner switches between Participant and Option grouping without losing Shee
         ->assertSee('Neighborhood meal train');
 });
 
+test('Option grouping uses a supported breakpoint for participant contact details', function () {
+    $owner = Account::factory()->create();
+    $sheet = Sheet::factory()->for($owner, 'owner')->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'selection_maximum' => 1,
+    ]);
+    $option = $sheet->options()->create([
+        'name' => 'Supported breakpoint Option',
+        'capacity' => 1,
+        'claimed_count' => 1,
+        'position' => 1,
+    ]);
+    $signup = $sheet->signups()->create([
+        'name_snapshot' => 'Responsive Participant',
+        'email_snapshot' => 'responsive@example.test',
+    ]);
+    $signup->optionClaims()->create(['option_id' => $option->id]);
+
+    Livewire::actingAs($owner)
+        ->test('pages::sheets.signups', ['sheet' => $sheet])
+        ->call('showOptionGrouping')
+        ->assertSeeHtml('grid gap-3 text-sm sm:grid-cols-2')
+        ->assertDontSeeHtml('xs:grid-cols-2');
+});
+
 test('Participant grouping shows immutable snapshots, Option Claims, association state, and over-limit Signups', function () {
     $owner = Account::factory()->create();
     $attachedAccount = Account::factory()->create([

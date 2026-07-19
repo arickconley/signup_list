@@ -356,7 +356,7 @@ new #[Layout('layouts.app', ['robots' => 'noindex, nofollow'])] #[Title('Signup 
                                                         </p>
                                                     @endif
                                                 </div>
-                                                <dl class="grid gap-3 text-sm xs:grid-cols-2 sm:grid-cols-1 md:grid-cols-2">
+                                                <dl class="grid gap-3 text-sm sm:grid-cols-2">
                                                     <div>
                                                         <dt class="font-semibold text-stone-500 dark:text-stone-400">{{ __('Submitted email') }}</dt>
                                                         <dd class="mt-0.5 break-words font-medium">{{ $claimingSignup->email_snapshot ?? __('Not submitted') }}</dd>

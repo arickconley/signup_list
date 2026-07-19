@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Actions\AttachPendingAccountAssociations;
 use App\Actions\CompleteVerifiedSignup as CompleteSignup;
 use App\Data\CompleteSignupInput;
 use App\Exceptions\CannotCompleteSignup;
@@ -10,6 +11,7 @@ use App\Models\OptionClaim;
 use App\Models\Sheet;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 
@@ -42,8 +44,10 @@ class CompleteVerifiedSignup extends Component
     /** @var array<int, string> */
     public array $unavailableOptionNames = [];
 
-    public function mount(string $sheetPublicId): void
-    {
+    public function mount(
+        string $sheetPublicId,
+        AttachPendingAccountAssociations $attachPendingAccountAssociations,
+    ): void {
         $account = Auth::user();
 
         abort_unless($account instanceof Account && $account->hasVerifiedEmail(), 403);
@@ -61,10 +65,8 @@ class CompleteVerifiedSignup extends Component
         $this->email = $defaults->email;
         $this->phone = $defaults->phone ?? '';
 
-        $existingSignup = $sheet->signups()
-            ->where('account_id', $account->id)
-            ->with('optionClaims.option')
-            ->first();
+        $existingSignup = $attachPendingAccountAssociations
+            ->handleForSheet($account, $sheet)?->load('optionClaims.option');
 
         if ($existingSignup !== null) {
             $this->existingSignup = true;
@@ -103,6 +105,18 @@ class CompleteVerifiedSignup extends Component
             'selectedOptions.min' => __('Choose at least one available Option.'),
             'selectedOptions.max' => __('Choose between 1 and :max available Options.'),
         ]);
+
+        $rateLimitKey = 'signup:'.$this->sheetPublicId.'|account:'.$account->id;
+
+        if (RateLimiter::tooManyAttempts($rateLimitKey, 5)) {
+            $message = __('Too many signup attempts. Please wait a minute and try again.');
+            $this->addError('signup', $message);
+            $this->announcement = $message;
+
+            return;
+        }
+
+        RateLimiter::hit($rateLimitKey, 60);
 
         try {
             $completeSignup->handle($account, new CompleteSignupInput(

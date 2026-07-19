@@ -5,9 +5,10 @@ use App\Models\OptionClaim;
 use App\Models\Sheet;
 use App\Models\Signup;
 use Illuminate\Support\Facades\DB;
+use Livewire\Livewire;
 use Symfony\Component\Process\Process;
 
-test('busy cancellation leaves the Signup claims and every capacity counter unchanged', function () {
+test('busy cancellation leaves the Signup claims and counters unchanged and is recoverable in Livewire', function () {
     $originalDatabase = config('database.connections.sqlite.database');
     $originalBusyTimeout = config('database.connections.sqlite.busy_timeout');
     $originalTransactionMode = config('database.connections.sqlite.transaction_mode');
@@ -19,6 +20,7 @@ test('busy cancellation leaves the Signup claims and every capacity counter unch
     $gatePath = $databasePath.'.go';
     $cancelReadyPath = $databasePath.'.cancel-ready';
     $lockReadyPath = $databasePath.'.lock-ready';
+    $componentLockReadyPath = $databasePath.'.component-lock-ready';
     $processes = [];
 
     try {
@@ -129,6 +131,45 @@ test('busy cancellation leaves the Signup claims and every capacity counter unch
             ->and(OptionClaim::query()->where('signup_id', $signup->id)->count())->toBe(2)
             ->and($first->fresh()->claimed_count)->toBe(1)
             ->and($second->fresh()->claimed_count)->toBe(1);
+
+        $component = Livewire::actingAs($account)
+            ->test('pages::signups.edit', ['signup' => $signup]);
+
+        $componentLockHolder = new Process([
+            PHP_BINARY,
+            base_path('tests/Fixtures/hold-sqlite-write-lock.php'),
+            $databasePath,
+            $componentLockReadyPath,
+            '1200',
+        ], base_path());
+        $componentLockHolder->setTimeout(10)->start();
+        $processes[] = $componentLockHolder;
+
+        $componentLockReadyDeadline = microtime(true) + 5;
+
+        while (
+            ! file_exists($componentLockReadyPath)
+            && $componentLockHolder->isRunning()
+            && microtime(true) < $componentLockReadyDeadline
+        ) {
+            usleep(5_000);
+        }
+
+        expect(file_exists($componentLockReadyPath))->toBeTrue();
+
+        $component
+            ->call('cancel')
+            ->assertHasErrors(['signup'])
+            ->assertSet('announcement', 'The Signup Sheet is busy. Please wait a moment and try again.')
+            ->assertSee('The Signup Sheet is busy. Please wait a moment and try again.')
+            ->assertNoRedirect();
+
+        $componentLockHolder->wait();
+
+        expect(Signup::query()->find($signup->id))->not->toBeNull()
+            ->and(OptionClaim::query()->where('signup_id', $signup->id)->count())->toBe(2)
+            ->and($first->fresh()->claimed_count)->toBe(1)
+            ->and($second->fresh()->claimed_count)->toBe(1);
     } finally {
         foreach ($processes as $process) {
             if ($process->isRunning()) {
@@ -149,6 +190,7 @@ test('busy cancellation leaves the Signup claims and every capacity counter unch
         @unlink($gatePath);
         @unlink($cancelReadyPath);
         @unlink($lockReadyPath);
+        @unlink($componentLockReadyPath);
         @unlink($databasePath);
         @unlink($databasePath.'-shm');
         @unlink($databasePath.'-wal');

@@ -3,9 +3,11 @@
 use App\Actions\CancelParticipantSignup;
 use App\Actions\UpdateParticipantSignup;
 use App\Data\UpdateParticipantSignupInput;
+use App\Exceptions\CannotCancelParticipantSignup;
 use App\Exceptions\CannotUpdateParticipantSignup;
 use App\Models\Account;
 use App\Models\Option;
+use App\Models\Sheet;
 use App\Models\Signup;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -134,7 +136,14 @@ new #[Title('Edit Signup')] class extends Component
     {
         $account = $this->authorizeParticipant();
 
-        $cancelParticipantSignup->handle($account, $this->signup->id);
+        try {
+            $cancelParticipantSignup->handle($account, $this->signup->id);
+        } catch (CannotCancelParticipantSignup $exception) {
+            $this->addError('signup', $exception->getMessage());
+            $this->announcement = $exception->getMessage();
+
+            return;
+        }
 
         session()->flash('success', __('Signup cancelled. Its Option Claims are available again.'));
 
@@ -168,7 +177,7 @@ new #[Title('Edit Signup')] class extends Component
 
 ?>
 
-<x-layouts::app :title="__('Edit Signup')">
+<x-layouts::app :title="__('Edit Signup')" robots="noindex, nofollow">
     <div class="mx-auto max-w-3xl">
         <header class="border-b border-stone-200 pb-6 dark:border-stone-800">
             <p class="text-xs font-bold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-400">{{ __('Your Signup') }}</p>
@@ -222,15 +231,27 @@ new #[Title('Edit Signup')] class extends Component
                 </div>
             </section>
 
-            <fieldset class="grid gap-4">
-                <legend class="font-display text-2xl font-semibold">{{ __('Visibility Consent') }}</legend>
-                <p class="text-sm leading-6 text-stone-600 dark:text-stone-400">{{ __('The Owner always sees submitted details. Public display also depends on the Signup Sheet settings.') }}</p>
-                <div class="grid gap-3 sm:grid-cols-3">
-                    <x-ui.checkbox wire:model="nameConsent" id="name-consent" name="nameConsent" :label="__('Share full name')" variant="card" />
-                    <x-ui.checkbox wire:model="emailConsent" id="email-consent" name="emailConsent" :label="__('Share email')" variant="card" />
-                    <x-ui.checkbox wire:model="phoneConsent" id="phone-consent" name="phoneConsent" :label="__('Share phone')" variant="card" />
-                </div>
-            </fieldset>
+            @if (
+                $signup->sheet->name_visibility === Sheet::VISIBILITY_PARTICIPANTS
+                || $signup->sheet->email_visibility === Sheet::VISIBILITY_PARTICIPANTS
+                || $signup->sheet->phone_visibility === Sheet::VISIBILITY_PARTICIPANTS
+            )
+                <fieldset class="grid gap-4">
+                    <legend class="font-display text-2xl font-semibold">{{ __('Visibility Consent') }}</legend>
+                    <p class="text-sm leading-6 text-stone-600 dark:text-stone-400">{{ __('The Owner always sees submitted details. Public display also depends on the Signup Sheet settings.') }}</p>
+                    <div class="grid gap-3 sm:grid-cols-3">
+                        @if ($signup->sheet->name_visibility === Sheet::VISIBILITY_PARTICIPANTS)
+                            <x-ui.checkbox wire:model="nameConsent" id="name-consent" name="nameConsent" :label="__('Share full name')" variant="card" />
+                        @endif
+                        @if ($signup->sheet->email_visibility === Sheet::VISIBILITY_PARTICIPANTS)
+                            <x-ui.checkbox wire:model="emailConsent" id="email-consent" name="emailConsent" :label="__('Share email')" variant="card" />
+                        @endif
+                        @if ($signup->sheet->phone_visibility === Sheet::VISIBILITY_PARTICIPANTS)
+                            <x-ui.checkbox wire:model="phoneConsent" id="phone-consent" name="phoneConsent" :label="__('Share phone')" variant="card" />
+                        @endif
+                    </div>
+                </fieldset>
+            @endif
 
             <fieldset class="grid gap-4" @if ($errors->has('selectedOptions') || $errors->has('signup')) aria-invalid="true" aria-describedby="participant-options-error" @endif>
                 <legend class="font-display text-2xl font-semibold">{{ __('Option Claims') }}</legend>

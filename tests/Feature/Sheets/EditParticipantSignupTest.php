@@ -54,6 +54,17 @@ test('associated verified Account opens its participant Signup edit route', func
         ->assertSee('Community Work Day');
 });
 
+test('participant Signup edit document is noindex nofollow', function () {
+    $account = Account::factory()->create();
+    $signup = issue14ParticipantUiSignup($account);
+
+    $this->actingAs($account)
+        ->get(route('signups.edit', $signup))
+        ->assertOk()
+        ->assertHeader('X-Robots-Tag', 'noindex, nofollow')
+        ->assertSeeHtml('<meta name="robots" content="noindex, nofollow">');
+});
+
 test('another Account receives not found for participant Signup editing', function () {
     $account = Account::factory()->create();
     $otherAccount = Account::factory()->create();
@@ -67,6 +78,11 @@ test('another Account receives not found for participant Signup editing', functi
 test('participant edit form initializes immutable Account email details consent and every current Option Claim', function () {
     $account = Account::factory()->create(['email' => 'participant@example.com']);
     $signup = issue14ParticipantUiSignup($account);
+    $signup->sheet->update([
+        'name_visibility' => Sheet::VISIBILITY_PARTICIPANTS,
+        'email_visibility' => Sheet::VISIBILITY_PARTICIPANTS,
+        'phone_visibility' => Sheet::VISIBILITY_PARTICIPANTS,
+    ]);
     $signup->update([
         'name_snapshot' => 'Visible Participant',
         'phone_snapshot' => '555-0198',
@@ -116,9 +132,31 @@ test('participant edit form initializes immutable Account email details consent 
         ->assertSee($available->name);
 });
 
+test('participant edit renders consent only for participant-visible fields', function () {
+    $account = Account::factory()->create();
+    $signup = issue14ParticipantUiSignup($account);
+    $signup->sheet->update([
+        'name_visibility' => Sheet::VISIBILITY_PARTICIPANTS,
+        'email_visibility' => Sheet::VISIBILITY_OWNER_ONLY,
+        'phone_visibility' => Sheet::VISIBILITY_PARTICIPANTS,
+    ]);
+
+    Livewire::actingAs($account)
+        ->test('pages::signups.edit', ['signup' => $signup])
+        ->assertSee('Visibility Consent')
+        ->assertSee('Share full name')
+        ->assertDontSee('Share email')
+        ->assertSee('Share phone');
+});
+
 test('participant saves editable details consent and Option Claims while email identity remains unchanged', function () {
     $account = Account::factory()->create(['email' => 'fixed@example.com']);
     $signup = issue14ParticipantUiSignup($account);
+    $signup->sheet->update([
+        'name_visibility' => Sheet::VISIBILITY_PARTICIPANTS,
+        'email_visibility' => Sheet::VISIBILITY_PARTICIPANTS,
+        'phone_visibility' => Sheet::VISIBILITY_PARTICIPANTS,
+    ]);
     $current = $signup->sheet->options()->create([
         'name' => 'Current Option',
         'capacity' => 2,

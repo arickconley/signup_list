@@ -7,6 +7,7 @@ use App\Exceptions\CannotChangeSignupClaims;
 use App\Exceptions\CannotUpdateParticipantSignup;
 use App\Exceptions\ImmediateTransactionBusy;
 use App\Models\Account;
+use App\Models\Sheet;
 use App\Models\Signup;
 use App\Support\ImmediateDatabaseTransaction;
 use Illuminate\Support\Facades\DB;
@@ -70,9 +71,12 @@ final class UpdateParticipantSignup
         $signup->update([
             'name_snapshot' => $name,
             'phone_snapshot' => $phone,
-            'name_consent' => $input->nameConsent,
-            'email_consent' => $input->emailConsent,
-            'phone_consent' => $input->phoneConsent,
+            'name_consent' => $signup->sheet->name_visibility === Sheet::VISIBILITY_PARTICIPANTS
+                && $input->nameConsent,
+            'email_consent' => $signup->sheet->email_visibility === Sheet::VISIBILITY_PARTICIPANTS
+                && $input->emailConsent,
+            'phone_consent' => $signup->sheet->phone_visibility === Sheet::VISIBILITY_PARTICIPANTS
+                && $input->phoneConsent,
         ]);
     }
 }

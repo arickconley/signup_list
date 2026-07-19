@@ -4,6 +4,7 @@ namespace App\Actions;
 
 use App\Models\Account;
 use App\Models\PendingAccountAssociation;
+use App\Models\Sheet;
 use App\Models\Signup;
 use App\Support\ImmediateDatabaseTransaction;
 use Illuminate\Database\Eloquent\Builder;
@@ -39,6 +40,49 @@ final class AttachPendingAccountAssociations
             foreach ($associations as $association) {
                 $this->attach($association, $currentAccount, $normalizedEmail);
             }
+        });
+    }
+
+    public function handleForSheet(Account $account, Sheet $sheet): ?Signup
+    {
+        return $this->immediateTransaction->run(function () use ($account, $sheet): ?Signup {
+            $currentAccount = Account::query()->whereKey($account->getKey())->first();
+
+            if ($currentAccount === null || ! $currentAccount->hasVerifiedEmail()) {
+                return null;
+            }
+
+            $existingSignup = Signup::query()
+                ->where('sheet_id', $sheet->id)
+                ->where('account_id', $currentAccount->id)
+                ->first();
+
+            if ($existingSignup !== null) {
+                return $existingSignup;
+            }
+
+            $normalizedEmail = Account::normalizeEmail($currentAccount->email);
+            $association = $currentAccount->pendingAccountAssociations()
+                ->whereHas('signup', function (Builder $query) use ($sheet, $normalizedEmail): void {
+                    $query
+                        ->where('sheet_id', $sheet->id)
+                        ->whereNull('account_id')
+                        ->where('email_snapshot', $normalizedEmail);
+                })
+                ->with('signup')
+                ->orderBy('id')
+                ->first();
+
+            if ($association === null) {
+                return null;
+            }
+
+            $this->attach($association, $currentAccount, $normalizedEmail);
+
+            return Signup::query()
+                ->where('sheet_id', $sheet->id)
+                ->where('account_id', $currentAccount->id)
+                ->first();
         });
     }
 

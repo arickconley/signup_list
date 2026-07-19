@@ -61,6 +61,8 @@ class Sheet extends Model
 
     public const string VISIBILITY_OWNER_ONLY = 'owner_only';
 
+    public const string VISIBILITY_PARTICIPANTS = 'participants';
+
     /** @var array<string, mixed> */
     protected $attributes = [
         'participation_policy' => self::PARTICIPATION_OPEN,

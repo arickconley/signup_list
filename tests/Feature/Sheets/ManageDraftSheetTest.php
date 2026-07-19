@@ -218,6 +218,19 @@ test('Owner can change a Signup Sheet participation policy', function () {
         ->assertSee('Verified Participation');
 });
 
+test('Participation Policy validation error is associated with the edit radio group', function () {
+    $owner = Account::factory()->create();
+    $sheet = Sheet::factory()->for($owner, 'owner')->create();
+    $this->actingAs($owner);
+
+    Livewire::test('pages::sheets.edit', ['sheet' => $sheet])
+        ->set('participationPolicy', 'invalid')
+        ->call('saveDetails')
+        ->assertHasErrors(['participationPolicy'])
+        ->assertSeeHtml('aria-invalid="true" aria-describedby="participation-policy-error"')
+        ->assertSeeHtml('id="participation-policy-error"');
+});
+
 test('Owner publishes a valid Draft Sheet to its UUID link', function () {
     $owner = Account::factory()->create();
     $sheet = Sheet::factory()->for($owner, 'owner')->create(['selection_maximum' => 1]);

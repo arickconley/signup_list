@@ -376,7 +376,7 @@ new #[Title('Edit Draft Sheet')] class extends Component
                 <x-ui.input wire:model="selectionMaximum" :label="__('Selection maximum')" type="number" min="1" :description="__('Maximum Options each Signup may claim.')" />
             </div>
 
-            <fieldset class="grid gap-3">
+            <fieldset class="grid gap-3" @if ($errors->has('participationPolicy')) aria-invalid="true" aria-describedby="participation-policy-error" @endif>
                 <legend class="text-sm font-semibold text-stone-800 dark:text-stone-100">{{ __('Participation policy') }}</legend>
                 <div class="grid gap-3 sm:grid-cols-2">
                     <label class="flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border border-stone-300 p-4 dark:border-stone-700">
@@ -395,7 +395,7 @@ new #[Title('Edit Draft Sheet')] class extends Component
                     </label>
                 </div>
                 @error('participationPolicy')
-                    <p class="text-sm font-medium text-red-700 dark:text-red-400">{{ $message }}</p>
+                    <p id="participation-policy-error" class="text-sm font-medium text-red-700 dark:text-red-400">{{ $message }}</p>
                 @enderror
             </fieldset>
 

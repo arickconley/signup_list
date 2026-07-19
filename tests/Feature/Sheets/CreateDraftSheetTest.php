@@ -95,6 +95,19 @@ test('Owner can choose Verified Participation when creating a Draft Sheet', func
         ->toBe(Sheet::PARTICIPATION_VERIFIED);
 });
 
+test('Participation Policy validation error is associated with the create radio group', function () {
+    $account = Account::factory()->create();
+    $this->actingAs($account);
+
+    Livewire::test('pages::sheets.create')
+        ->set('title', 'Invalid policy draft')
+        ->set('participationPolicy', 'invalid')
+        ->call('save')
+        ->assertHasErrors(['participationPolicy'])
+        ->assertSeeHtml('aria-invalid="true" aria-describedby="participation-policy-error"')
+        ->assertSeeHtml('id="participation-policy-error"');
+});
+
 test('eligible Account creates a UUID-addressed Draft visible on its dashboard', function () {
     $account = Account::factory()->create();
     $this->actingAs($account);

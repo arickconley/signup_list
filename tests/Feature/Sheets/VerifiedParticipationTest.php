@@ -122,6 +122,66 @@ test('Verified Account completes one capacity-bearing Signup', function () {
         ->and($option->refresh()->claimed_count)->toBe(1);
 });
 
+test('Verified Signup attempts are throttled independently per Sheet and Account', function () {
+    $account = Account::factory()->create([
+        'name' => 'Limited Participant',
+        'email' => 'limited@example.com',
+    ]);
+    $otherAccount = Account::factory()->create([
+        'name' => 'Other Participant',
+        'email' => 'other@example.com',
+    ]);
+    $sheet = Sheet::factory()->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_VERIFIED,
+        'selection_maximum' => 1,
+    ]);
+    $option = $sheet->options()->create([
+        'name' => 'Rate-limited choice',
+        'capacity' => 3,
+        'position' => 1,
+    ]);
+
+    $component = Livewire::actingAs($account)
+        ->test('complete-verified-signup', ['sheetPublicId' => $sheet->public_id])
+        ->set('selectedOptions', [$option->public_id]);
+
+    foreach (range(1, 5) as $attempt) {
+        $component
+            ->call('complete')
+            ->assertHasNoErrors();
+    }
+
+    $component
+        ->call('complete')
+        ->assertHasErrors(['signup'])
+        ->assertSet('announcement', 'Too many signup attempts. Please wait a minute and try again.')
+        ->assertSee('Too many signup attempts');
+
+    Livewire::actingAs($otherAccount)
+        ->test('complete-verified-signup', ['sheetPublicId' => $sheet->public_id])
+        ->set('selectedOptions', [$option->public_id])
+        ->call('complete')
+        ->assertHasNoErrors();
+
+    $otherSheet = Sheet::factory()->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_VERIFIED,
+        'selection_maximum' => 1,
+    ]);
+    $otherOption = $otherSheet->options()->create([
+        'name' => 'Other Sheet choice',
+        'capacity' => 1,
+        'position' => 1,
+    ]);
+
+    Livewire::actingAs($account)
+        ->test('complete-verified-signup', ['sheetPublicId' => $otherSheet->public_id])
+        ->set('selectedOptions', [$otherOption->public_id])
+        ->call('complete')
+        ->assertHasNoErrors();
+});
+
 test('Returning verified Participant reaches its existing Signup instead of a duplicate form', function () {
     $account = Account::factory()->create([
         'name' => 'Returning Participant',
@@ -152,6 +212,102 @@ test('Returning verified Participant reaches its existing Signup instead of a du
         ->assertDontSee('Complete Signup');
 
     expect($sheet->signups()->count())->toBe(1)
+        ->and($option->refresh()->claimed_count)->toBe(1);
+});
+
+test('Verified policy transition attaches a matching Pending Account Association and preserves its Signup', function () {
+    $account = Account::factory()->create([
+        'email' => 'policy-transition@example.com',
+    ]);
+    $sheet = Sheet::factory()->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_OPEN,
+        'selection_maximum' => 1,
+    ]);
+    $claimedOption = $sheet->options()->create([
+        'name' => 'Original Open choice',
+        'capacity' => 2,
+        'claimed_count' => 1,
+        'position' => 1,
+    ]);
+    $unselectedOption = $sheet->options()->create([
+        'name' => 'Unselected Verified choice',
+        'capacity' => 2,
+        'position' => 2,
+    ]);
+    $signup = $sheet->signups()->create([
+        'name_snapshot' => 'Original Snapshot',
+        'email_snapshot' => 'policy-transition@example.com',
+        'phone_snapshot' => '555-0147',
+        'name_consent' => true,
+        'email_consent' => false,
+        'phone_consent' => true,
+    ]);
+    $association = $signup->pendingAccountAssociation()->create([
+        'account_id' => $account->id,
+    ]);
+    $claim = $signup->optionClaims()->create(['option_id' => $claimedOption->id]);
+    $snapshot = $signup->only([
+        'name_snapshot',
+        'email_snapshot',
+        'phone_snapshot',
+        'name_consent',
+        'email_consent',
+        'phone_consent',
+    ]);
+    $sheet->update(['participation_policy' => Sheet::PARTICIPATION_VERIFIED]);
+
+    app(CompleteVerifiedSignup::class)->handle($account, new CompleteSignupInput(
+        sheetPublicId: $sheet->public_id,
+        name: 'Replacement Snapshot',
+        phone: '555-9999',
+        optionPublicIds: [$unselectedOption->public_id],
+        email: $account->email,
+    ));
+
+    expect($sheet->signups()->count())->toBe(1)
+        ->and($signup->refresh()->account_id)->toBe($account->id)
+        ->and($signup->only(array_keys($snapshot)))->toBe($snapshot)
+        ->and($signup->optionClaims()->pluck('id')->all())->toBe([$claim->id])
+        ->and(PendingAccountAssociation::query()->find($association->id))->toBeNull()
+        ->and($claimedOption->refresh()->claimed_count)->toBe(1)
+        ->and($unselectedOption->refresh()->claimed_count)->toBe(0);
+});
+
+test('Verified Participation mount resolves a matching Pending Account Association as the existing Signup', function () {
+    $account = Account::factory()->create([
+        'email' => 'mount-transition@example.com',
+    ]);
+    $sheet = Sheet::factory()->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_VERIFIED,
+        'selection_maximum' => 1,
+    ]);
+    $option = $sheet->options()->create([
+        'name' => 'Preserved mount choice',
+        'capacity' => 2,
+        'claimed_count' => 1,
+        'position' => 1,
+    ]);
+    $signup = $sheet->signups()->create([
+        'name_snapshot' => 'Mount Snapshot',
+        'email_snapshot' => $account->email,
+    ]);
+    $association = $signup->pendingAccountAssociation()->create([
+        'account_id' => $account->id,
+    ]);
+    $claim = $signup->optionClaims()->create(['option_id' => $option->id]);
+
+    Livewire::actingAs($account)
+        ->test('complete-verified-signup', ['sheetPublicId' => $sheet->public_id])
+        ->assertSet('existingSignup', true)
+        ->assertSee('Your Signup is ready')
+        ->assertSee('Preserved mount choice')
+        ->assertDontSee('Complete Signup');
+
+    expect($signup->refresh()->account_id)->toBe($account->id)
+        ->and($signup->optionClaims()->pluck('id')->all())->toBe([$claim->id])
+        ->and(PendingAccountAssociation::query()->find($association->id))->toBeNull()
         ->and($option->refresh()->claimed_count)->toBe(1);
 });
 

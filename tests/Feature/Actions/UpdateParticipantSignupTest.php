@@ -67,6 +67,9 @@ test('associated verified Account updates its Signup snapshots consent and Optio
         'state' => Sheet::STATE_PUBLISHED,
         'participation_policy' => Sheet::PARTICIPATION_OPEN,
         'selection_maximum' => 1,
+        'name_visibility' => Sheet::VISIBILITY_PARTICIPANTS,
+        'email_visibility' => Sheet::VISIBILITY_PARTICIPANTS,
+        'phone_visibility' => Sheet::VISIBILITY_PARTICIPANTS,
     ]);
     $originalOption = $sheet->options()->create([
         'name' => 'Welcome table',
@@ -107,6 +110,31 @@ test('associated verified Account updates its Signup snapshots consent and Optio
         ->and($signup->optionClaims()->pluck('option_id')->all())->toBe([$replacementOption->id])
         ->and($originalOption->refresh()->claimed_count)->toBe(0)
         ->and($replacementOption->refresh()->claimed_count)->toBe(1);
+});
+
+test('participant update persists consent only for participant-visible fields', function () {
+    ['account' => $account, 'sheet' => $sheet, 'signup' => $signup] = issue14EditableSignup(selectionMaximum: 1);
+    $sheet->update([
+        'name_visibility' => Sheet::VISIBILITY_PARTICIPANTS,
+        'email_visibility' => Sheet::VISIBILITY_OWNER_ONLY,
+        'phone_visibility' => Sheet::VISIBILITY_PARTICIPANTS,
+    ]);
+    $signup->update([
+        'name_consent' => false,
+        'email_consent' => true,
+        'phone_consent' => false,
+    ]);
+    $option = issue14ClaimedOption($sheet, $signup, 'Consent choice', 1);
+
+    app(UpdateParticipantSignup::class)->handle(
+        $account,
+        issue14UpdateInput($signup, [$option->public_id]),
+    );
+
+    expect($signup->refresh())
+        ->name_consent->toBeTrue()
+        ->email_consent->toBeFalse()
+        ->phone_consent->toBeTrue();
 });
 
 test('unchanged Option Claims perform no counter changes', function () {
