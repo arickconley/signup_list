@@ -65,13 +65,7 @@ new #[Title('Edit Signup Sheet')] class extends Component
         $sheet->refresh();
         abort_if($sheet->isArchived(), 404);
 
-        Sheet::query()
-            ->whereKey($sheet->id)
-            ->where('owner_id', Auth::id())
-            ->where('state', Sheet::STATE_PUBLISHED)
-            ->where('deadline_at', '<=', now())
-            ->update(['state' => Sheet::STATE_CLOSED]);
-        $sheet->refresh();
+        $this->closePublishedSheetAtDeadline($sheet);
 
         $this->sheet = $sheet;
         $this->title = $sheet->title;
@@ -91,6 +85,7 @@ new #[Title('Edit Signup Sheet')] class extends Component
     public function hydrate(): void
     {
         $this->authorizeOwner();
+        $this->closePublishedSheetAtDeadline($this->sheet);
     }
 
     public function saveDetails(): void
@@ -510,6 +505,17 @@ new #[Title('Edit Signup Sheet')] class extends Component
             $this->sheet->owner_id === Auth::id() && ! $this->sheet->isArchived(),
             404,
         );
+    }
+
+    private function closePublishedSheetAtDeadline(Sheet $sheet): void
+    {
+        Sheet::query()
+            ->whereKey($sheet->id)
+            ->where('owner_id', Auth::id())
+            ->where('state', Sheet::STATE_PUBLISHED)
+            ->where('deadline_at', '<=', now())
+            ->update(['state' => Sheet::STATE_CLOSED]);
+        $sheet->refresh();
     }
 };
 

@@ -946,6 +946,54 @@ test('expired Published Sheet is persisted Closed in the Owner editor until expl
         ->and($sheet->signups()->count())->toBe(1);
 });
 
+test('Owner editor open across the exact deadline cannot save a future deadline without explicit reopen', function () {
+    $this->travelTo(Carbon::parse('2026-08-01 18:59:59 UTC'));
+
+    $owner = Account::factory()->create(['timezone' => 'America/Los_Angeles']);
+    $sheet = Sheet::factory()->for($owner, 'owner')->create([
+        'title' => 'Deadline crossing field day',
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_OPEN,
+        'selection_maximum' => 1,
+        'deadline_at' => Carbon::parse('2026-08-01 19:00:00 UTC'),
+    ]);
+    $option = $sheet->options()->create([
+        'name' => 'Afternoon cleanup',
+        'capacity' => 2,
+        'position' => 1,
+    ]);
+
+    $editor = Livewire::actingAs($owner)
+        ->test('pages::sheets.edit', ['sheet' => $sheet])
+        ->assertSee('Published Sheet')
+        ->assertSee('Close Sheet');
+
+    $this->travelTo(Carbon::parse('2026-08-01 19:00:00 UTC'));
+
+    $editor
+        ->set('title', 'Updated deadline crossing field day')
+        ->set('deadlineAt', '2026-08-02T12:00')
+        ->call('saveDetails')
+        ->assertHasNoErrors()
+        ->assertSee('Closed Sheet')
+        ->assertSee('Reopen Sheet')
+        ->assertDontSee('Published Sheet')
+        ->assertDontSee('Close Sheet');
+
+    expect($sheet->refresh())
+        ->title->toBe('Updated deadline crossing field day')
+        ->state->toBe(Sheet::STATE_CLOSED)
+        ->deadline_at->toIso8601String()->toBe('2026-08-02T19:00:00+00:00');
+
+    expect(fn () => app(CompleteOpenSignup::class)->handle(new CompleteSignupInput(
+        sheetPublicId: $sheet->public_id,
+        name: 'Blocked without explicit reopen',
+        phone: null,
+        optionPublicIds: [$option->public_id],
+    )))->toThrow(CannotCompleteSignup::class, 'no longer open')
+        ->and($sheet->signups()->count())->toBe(0);
+});
+
 test('Owner manually closes a Published Sheet before its deadline and new Signups are rejected', function () {
     $this->travelTo(Carbon::parse('2026-08-01 19:00:00 UTC'));
 
