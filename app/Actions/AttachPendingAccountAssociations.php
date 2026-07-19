@@ -45,6 +45,35 @@ final class AttachPendingAccountAssociations
 
     public function handleForSheet(Account $account, Sheet $sheet): ?Signup
     {
+        $currentAccount = Account::query()->whereKey($account->getKey())->first();
+
+        if ($currentAccount === null || ! $currentAccount->hasVerifiedEmail()) {
+            return null;
+        }
+
+        $existingSignup = Signup::query()
+            ->where('sheet_id', $sheet->id)
+            ->where('account_id', $currentAccount->id)
+            ->first();
+
+        if ($existingSignup !== null) {
+            return $existingSignup;
+        }
+
+        $normalizedEmail = Account::normalizeEmail($currentAccount->email);
+        $candidateExists = $currentAccount->pendingAccountAssociations()
+            ->whereHas('signup', function (Builder $query) use ($sheet, $normalizedEmail): void {
+                $query
+                    ->where('sheet_id', $sheet->id)
+                    ->whereNull('account_id')
+                    ->where('email_snapshot', $normalizedEmail);
+            })
+            ->exists();
+
+        if (! $candidateExists) {
+            return null;
+        }
+
         return $this->immediateTransaction->run(function () use ($account, $sheet): ?Signup {
             $currentAccount = Account::query()->whereKey($account->getKey())->first();
 

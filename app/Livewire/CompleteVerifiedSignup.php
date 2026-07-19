@@ -6,6 +6,7 @@ use App\Actions\AttachPendingAccountAssociations;
 use App\Actions\CompleteVerifiedSignup as CompleteSignup;
 use App\Data\CompleteSignupInput;
 use App\Exceptions\CannotCompleteSignup;
+use App\Exceptions\ImmediateTransactionBusy;
 use App\Models\Account;
 use App\Models\OptionClaim;
 use App\Models\Sheet;
@@ -65,8 +66,16 @@ class CompleteVerifiedSignup extends Component
         $this->email = $defaults->email;
         $this->phone = $defaults->phone ?? '';
 
-        $existingSignup = $attachPendingAccountAssociations
-            ->handleForSheet($account, $sheet)?->load('optionClaims.option');
+        try {
+            $existingSignup = $attachPendingAccountAssociations
+                ->handleForSheet($account, $sheet)?->load('optionClaims.option');
+        } catch (ImmediateTransactionBusy) {
+            $message = __('The Signup Sheet is busy. Please wait a moment and try again.');
+            $this->addError('signup', $message);
+            $this->announcement = $message;
+
+            return;
+        }
 
         if ($existingSignup !== null) {
             $this->existingSignup = true;
