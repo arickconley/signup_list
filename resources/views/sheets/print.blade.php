@@ -204,6 +204,6 @@
             </section>
             @endif
         </main>
-        <x-site-footer data-print-chrome />
+        <x-site-footer />
     </body>
 </html>
