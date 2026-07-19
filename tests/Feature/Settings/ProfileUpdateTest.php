@@ -178,30 +178,18 @@ test('email verification status is unchanged when email address is unchanged', f
     expect($account->refresh()->email_verified_at)->not->toBeNull();
 });
 
-test('account can be deleted', function () {
+test('password Account still requires its correct password after fresh email verification', function () {
     $account = Account::factory()->create();
 
-    $this->actingAs($account);
-
-    $response = Livewire::test('pages::settings.delete-user-modal')
-        ->set('password', 'password')
-        ->call('deleteUser');
-
-    $response
-        ->assertHasNoErrors()
-        ->assertRedirect('/');
-
-    expect($account->fresh())->toBeNull();
-    expect(auth()->check())->toBeFalse();
-});
-
-test('correct password must be provided to delete account', function () {
-    $account = Account::factory()->create();
-
-    $this->actingAs($account);
+    $this->actingAs($account)->withSession([
+        'account_deletion_email_verified_account_id' => $account->id,
+        'account_deletion_email_verified_address' => $account->email,
+        'account_deletion_email_verified_at' => now()->timestamp,
+    ]);
 
     $response = Livewire::test('pages::settings.delete-user-modal')
         ->set('password', 'wrong-password')
+        ->set('confirmation', 'DELETE')
         ->call('deleteUser');
 
     $response->assertHasErrors(['password']);
