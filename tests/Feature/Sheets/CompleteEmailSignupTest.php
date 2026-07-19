@@ -112,7 +112,7 @@ test('participant supplies email and completes a Signup with Pending Account Ass
         ->and(Hash::check($magicLinkSegments[3] ?? '', $challenge->token_hash))->toBeTrue();
 });
 
-test('future pending Signup persists explicit consent independently', function () {
+test('a Signup with a new Pending Account Association persists explicit Visibility Consent independently', function () {
     Mail::fake();
 
     $sheet = Sheet::factory()->create([
