@@ -33,6 +33,7 @@ npm run build
 
 - [Product specification](SPEC.md)
 - [Domain glossary](CONTEXT.md)
+- [Operator guide](docs/operations.md)
 - [Agent configuration](docs/agents/)
 
 ## Deployment constraint

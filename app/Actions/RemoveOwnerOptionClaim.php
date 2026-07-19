@@ -11,6 +11,7 @@ use App\Models\Sheet;
 use App\Models\Signup;
 use App\Support\ImmediateDatabaseTransaction;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
 final class RemoveOwnerOptionClaim
@@ -69,6 +70,14 @@ final class RemoveOwnerOptionClaim
                 $exception,
             );
         }
+
+        Log::info('signup.owner_removal', [
+            'operation' => 'option_claim',
+            'sheet_id' => $sheet->id,
+            'removed_signups' => 0,
+            'removed_option_claims' => 1,
+            'notification_jobs' => $change === null ? 0 : 1,
+        ]);
 
         if ($change !== null) {
             Mail::to($change['email'])->queue(new OwnerChangedSignupMail(

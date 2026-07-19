@@ -8,6 +8,7 @@ use App\Models\OptionClaim;
 use App\Models\Sheet;
 use Illuminate\Contracts\Queue\ShouldBeEncrypted;
 use Illuminate\Contracts\Queue\ShouldQueueAfterCommit;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
 test('Owner removes one Option Claim while preserving the Signup snapshots and other claims', function () {
@@ -233,4 +234,31 @@ test('mail queue failure cannot roll back a committed one-claim removal', functi
 
     expect(OptionClaim::query()->find($claim->id))->toBeNull()
         ->and($option->refresh()->claimed_count)->toBe(0);
+});
+
+test('Owner Option Claim removal produces structured volume telemetry', function () {
+    Mail::fake();
+    Log::spy();
+    $owner = Account::factory()->create();
+    $sheet = Sheet::factory()->for($owner, 'owner')->create();
+    $option = $sheet->options()->create([
+        'name' => 'Removed Option Claim',
+        'capacity' => 1,
+        'claimed_count' => 1,
+        'position' => 1,
+    ]);
+    $signup = $sheet->signups()->create(['name_snapshot' => 'Participant']);
+    $claim = $signup->optionClaims()->create(['option_id' => $option->id]);
+
+    app(RemoveOwnerOptionClaim::class)->handle($owner, $sheet, $claim->id);
+
+    Log::shouldHaveReceived('info')
+        ->with('signup.owner_removal', [
+            'operation' => 'option_claim',
+            'sheet_id' => $sheet->id,
+            'removed_signups' => 0,
+            'removed_option_claims' => 1,
+            'notification_jobs' => 0,
+        ])
+        ->once();
 });

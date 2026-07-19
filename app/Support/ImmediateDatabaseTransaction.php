@@ -6,6 +6,7 @@ use App\Exceptions\ImmediateTransactionBusy;
 use Closure;
 use Illuminate\Database\Connection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use LogicException;
 use PDOException;
 use Throwable;
@@ -64,11 +65,24 @@ final class ImmediateDatabaseTransaction
                 }
 
                 if ($attempt === self::LOCK_ATTEMPTS) {
+                    Log::error('sqlite.lock_failed', [
+                        'attempts' => self::LOCK_ATTEMPTS,
+                        'exception' => $exception::class,
+                        'error' => $exception->getMessage(),
+                    ]);
+
                     throw new ImmediateTransactionBusy(
                         'SQLite immediate transaction remained busy after bounded retries.',
                         previous: $exception,
                     );
                 }
+
+                Log::warning('sqlite.lock_retry', [
+                    'attempt' => $attempt,
+                    'max_attempts' => self::LOCK_ATTEMPTS,
+                    'exception' => $exception::class,
+                    'error' => $exception->getMessage(),
+                ]);
 
                 usleep($attempt * 25_000);
             }

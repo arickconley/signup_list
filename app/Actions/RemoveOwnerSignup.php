@@ -11,6 +11,7 @@ use App\Models\Sheet;
 use App\Models\Signup;
 use App\Support\ImmediateDatabaseTransaction;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
 final class RemoveOwnerSignup
@@ -27,7 +28,7 @@ final class RemoveOwnerSignup
         }
 
         try {
-            $change = $this->immediateTransaction->run(function () use ($owner, $sheet, $signupId): ?array {
+            $change = $this->immediateTransaction->run(function () use ($owner, $sheet, $signupId): array {
                 $currentOwner = Account::query()->whereKey($owner->id)->first();
                 $currentSheet = Sheet::query()
                     ->whereKey($sheet->id)
@@ -50,15 +51,12 @@ final class RemoveOwnerSignup
                 $this->replaceSignupClaims->releaseAll($signup);
                 $signup->delete();
 
-                if ($signup->email_snapshot === null) {
-                    return null;
-                }
-
                 return [
                     'email' => $signup->email_snapshot,
                     'sheet_title' => $currentSheet->title,
                     'sheet_url' => route('sheets.show', $currentSheet),
                     'before_selection_names' => $beforeSelectionNames,
+                    'removed_option_claims' => count($beforeSelectionNames),
                 ];
             });
         } catch (ImmediateTransactionBusy $exception) {
@@ -68,7 +66,15 @@ final class RemoveOwnerSignup
             );
         }
 
-        if ($change !== null) {
+        Log::info('signup.owner_removal', [
+            'operation' => 'signup',
+            'sheet_id' => $sheet->id,
+            'removed_signups' => 1,
+            'removed_option_claims' => $change['removed_option_claims'],
+            'notification_jobs' => $change['email'] === null ? 0 : 1,
+        ]);
+
+        if ($change['email'] !== null) {
             Mail::to($change['email'])->queue(new OwnerChangedSignupMail(
                 sheetTitle: $change['sheet_title'],
                 sheetUrl: $change['sheet_url'],

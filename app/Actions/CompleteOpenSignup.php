@@ -17,6 +17,7 @@ use App\Support\AccountAccessAbuseControl;
 use App\Support\ImmediateDatabaseTransaction;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class CompleteOpenSignup
@@ -74,6 +75,11 @@ class CompleteOpenSignup
         }
 
         if ($writeResult['duplicate'] && ! $this->abuseControl->attemptSend($normalizedEmail, $input->ipAddress)) {
+            Log::warning('signup.throttled', [
+                'operation' => 'duplicate_access_message',
+                'sheet_public_id' => $input->sheetPublicId,
+            ]);
+
             return new CompleteSignupResult(checkEmail: true);
         }
 
@@ -101,12 +107,28 @@ class CompleteOpenSignup
                 ->where('email_snapshot', $email)
                 ->first();
 
-            if ($signup === null || ! $this->abuseControl->attemptSend($email, $ipAddress)) {
+            if ($signup === null) {
+                return;
+            }
+
+            if (! $this->abuseControl->attemptSend($email, $ipAddress)) {
+                Log::warning('signup.throttled', [
+                    'operation' => 'capacity_failure_access_message',
+                    'sheet_public_id' => $sheetPublicId,
+                ]);
+
                 return;
             }
 
             $this->queueAccessMessage($signup, $email);
-        } catch (Throwable) {
+        } catch (Throwable $deliveryFailure) {
+            Log::error('mail.dispatch_failed', [
+                'operation' => 'signup_access_message',
+                'sheet_public_id' => $sheetPublicId,
+                'exception' => $deliveryFailure::class,
+                'error' => $deliveryFailure->getMessage(),
+            ]);
+
             // Preserve the identical capacity response even if access delivery fails.
         }
     }

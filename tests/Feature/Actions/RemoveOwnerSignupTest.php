@@ -7,6 +7,7 @@ use App\Models\Account;
 use App\Models\OptionClaim;
 use App\Models\Sheet;
 use App\Models\Signup;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
 test('Owner removes an entire Signup and releases all of its capacity', function () {
@@ -206,4 +207,41 @@ test('mail queue failure cannot roll back a committed whole-Signup removal', fun
 
     expect(Signup::query()->find($signup->id))->toBeNull()
         ->and($option->refresh()->claimed_count)->toBe(0);
+});
+
+test('Owner Signup removal produces structured volume telemetry', function () {
+    Mail::fake();
+    Log::spy();
+    $owner = Account::factory()->create();
+    $sheet = Sheet::factory()->for($owner, 'owner')->create();
+    $options = collect([
+        $sheet->options()->create([
+            'name' => 'First removed claim',
+            'capacity' => 1,
+            'claimed_count' => 1,
+            'position' => 1,
+        ]),
+        $sheet->options()->create([
+            'name' => 'Second removed claim',
+            'capacity' => 1,
+            'claimed_count' => 1,
+            'position' => 2,
+        ]),
+    ]);
+    $signup = $sheet->signups()->create(['name_snapshot' => 'Participant']);
+    $signup->optionClaims()->createMany($options->map(fn ($option): array => [
+        'option_id' => $option->id,
+    ])->all());
+
+    app(RemoveOwnerSignup::class)->handle($owner, $sheet, $signup->id);
+
+    Log::shouldHaveReceived('info')
+        ->with('signup.owner_removal', [
+            'operation' => 'signup',
+            'sheet_id' => $sheet->id,
+            'removed_signups' => 1,
+            'removed_option_claims' => 2,
+            'notification_jobs' => 0,
+        ])
+        ->once();
 });

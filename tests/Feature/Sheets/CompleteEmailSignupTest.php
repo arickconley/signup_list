@@ -2,6 +2,7 @@
 
 use App\Actions\CompleteOpenSignup;
 use App\Data\CompleteSignupInput;
+use App\Exceptions\CannotCompleteSignup;
 use App\Mail\SignupConfirmationMail;
 use App\Models\Account;
 use App\Models\AccountAccessChallenge;
@@ -15,6 +16,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
 use Livewire\Livewire;
@@ -210,6 +212,124 @@ test('duplicate normalized email is neutral and changes no Signup capacity', fun
         ->and(PendingAccountAssociation::query()->count())->toBe(1)
         ->and($option->refresh()->claimed_count)->toBe(1);
     Mail::assertQueuedTimes(SignupConfirmationMail::class, 2);
+});
+
+test('a throttled duplicate Signup access message produces a structured warning', function () {
+    Mail::fake();
+    Log::spy();
+    config()->set('account-access.resend_cooldown_seconds', 60);
+    $sheet = Sheet::factory()->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_OPEN,
+        'selection_maximum' => 1,
+    ]);
+    $option = $sheet->options()->create([
+        'name' => 'Welcome table',
+        'capacity' => 2,
+        'position' => 1,
+    ]);
+    $complete = fn () => Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
+        ->set('name', 'Casey Participant')
+        ->set('email', 'casey@example.test')
+        ->set('selectedOptions', [$option->public_id])
+        ->call('complete');
+
+    $complete();
+    $complete();
+    $complete();
+
+    Log::shouldHaveReceived('warning')
+        ->with('signup.throttled', [
+            'operation' => 'duplicate_access_message',
+            'sheet_public_id' => $sheet->public_id,
+        ])
+        ->once();
+});
+
+test('a throttled access message after a capacity failure produces a structured warning', function () {
+    Mail::fake();
+    Log::spy();
+    config()->set('account-access.resend_cooldown_seconds', 60);
+    $account = Account::factory()->unverified()->create(['email' => 'known@example.test']);
+    $sheet = Sheet::factory()->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_OPEN,
+        'selection_maximum' => 1,
+    ]);
+    $option = $sheet->options()->create([
+        'name' => 'Full Option',
+        'capacity' => 1,
+        'claimed_count' => 1,
+        'position' => 1,
+    ]);
+    $signup = $sheet->signups()->create([
+        'name_snapshot' => 'Known Participant',
+        'email_snapshot' => 'known@example.test',
+    ]);
+    $signup->pendingAccountAssociation()->create(['account_id' => $account->id]);
+    $signup->optionClaims()->create(['option_id' => $option->id]);
+    $attempt = fn () => app(CompleteOpenSignup::class)->handle(new CompleteSignupInput(
+        sheetPublicId: $sheet->public_id,
+        name: 'Known Participant',
+        phone: null,
+        optionPublicIds: [$option->public_id],
+        email: 'known@example.test',
+        ipAddress: '192.0.2.1',
+    ));
+
+    expect($attempt)->toThrow(CannotCompleteSignup::class);
+    expect($attempt)->toThrow(CannotCompleteSignup::class);
+
+    Log::shouldHaveReceived('warning')
+        ->with('signup.throttled', [
+            'operation' => 'capacity_failure_access_message',
+            'sheet_public_id' => $sheet->public_id,
+        ])
+        ->once();
+});
+
+test('a failed queued access message after a capacity failure produces a structured error', function () {
+    Log::spy();
+    $account = Account::factory()->unverified()->create(['email' => 'known@example.test']);
+    $sheet = Sheet::factory()->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_OPEN,
+        'selection_maximum' => 1,
+    ]);
+    $option = $sheet->options()->create([
+        'name' => 'Full Option',
+        'capacity' => 1,
+        'claimed_count' => 1,
+        'position' => 1,
+    ]);
+    $signup = $sheet->signups()->create([
+        'name_snapshot' => 'Known Participant',
+        'email_snapshot' => 'known@example.test',
+    ]);
+    $signup->pendingAccountAssociation()->create(['account_id' => $account->id]);
+    $signup->optionClaims()->create(['option_id' => $option->id]);
+    Mail::shouldReceive('to')
+        ->once()
+        ->with('known@example.test')
+        ->andThrow(new RuntimeException('Queue unavailable'));
+
+    expect(fn () => app(CompleteOpenSignup::class)->handle(new CompleteSignupInput(
+        sheetPublicId: $sheet->public_id,
+        name: 'Known Participant',
+        phone: null,
+        optionPublicIds: [$option->public_id],
+        email: 'known@example.test',
+        ipAddress: '192.0.2.1',
+    )))->toThrow(CannotCompleteSignup::class);
+
+    Log::shouldHaveReceived('error')
+        ->with('mail.dispatch_failed', [
+            'operation' => 'signup_access_message',
+            'sheet_public_id' => $sheet->public_id,
+            'exception' => RuntimeException::class,
+            'error' => 'Queue unavailable',
+        ])
+        ->once();
 });
 
 test('known and fresh emails receive the same capacity response while only the duplicate receives access', function () {

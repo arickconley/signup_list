@@ -8,6 +8,7 @@ use App\Models\OptionClaim;
 use App\Models\Sheet;
 use Illuminate\Contracts\Queue\ShouldBeEncrypted;
 use Illuminate\Contracts\Queue\ShouldQueueAfterCommit;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
 test('Owner deletes an unclaimed Published Option and preserves the remaining Option', function () {
@@ -315,6 +316,41 @@ test('Owner deletes a claimed Option while preserving Signups and other claims',
             fn ($option): array => $option->only(['id', 'name', 'capacity', 'claimed_count']),
         )->all())->toBe($retainedOptions);
     Mail::assertNothingQueued();
+});
+
+test('Owner Option deletion produces structured volume telemetry', function () {
+    Mail::fake();
+    Log::spy();
+    $owner = Account::factory()->create();
+    $sheet = Sheet::factory()->for($owner, 'owner')->create();
+    $removedOption = $sheet->options()->create([
+        'name' => 'Removed Option',
+        'capacity' => 2,
+        'claimed_count' => 2,
+        'position' => 1,
+    ]);
+    $sheet->options()->create([
+        'name' => 'Retained Option',
+        'capacity' => 1,
+        'position' => 2,
+    ]);
+
+    foreach (['First', 'Second'] as $name) {
+        $signup = $sheet->signups()->create(['name_snapshot' => $name]);
+        $signup->optionClaims()->create(['option_id' => $removedOption->id]);
+    }
+
+    app(DeleteOwnerOption::class)->handle($owner, $sheet, $removedOption->id, 2);
+
+    Log::shouldHaveReceived('info')
+        ->with('signup.owner_removal', [
+            'operation' => 'option',
+            'sheet_id' => $sheet->id,
+            'removed_signups' => 0,
+            'removed_option_claims' => 2,
+            'notification_jobs' => 0,
+        ])
+        ->once();
 });
 
 test('Published Sheet keeps at least one Option', function () {
