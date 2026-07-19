@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AccountAccessController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\OwnerPrintViewController;
 use App\Http\Controllers\ShowPublishedSheetController;
 use App\Http\Controllers\ShowVerifiedParticipationController;
 use App\Http\Middleware\PreventSearchIndexing;
@@ -18,6 +19,9 @@ Route::get('access/{challenge}/link/{token}', [AccountAccessController::class, '
 
 Route::middleware(['auth', 'verified', 'profile.complete'])->group(function () {
     Route::get('dashboard', DashboardController::class)->name('dashboard');
+    Route::get('sheets/{sheet}/signups/print', OwnerPrintViewController::class)
+        ->middleware(PreventSearchIndexing::class)
+        ->name('sheets.signups.print');
     Route::livewire('signups/{signup}/edit', 'pages::signups.edit')
         ->middleware(PreventSearchIndexing::class)
         ->name('signups.edit');

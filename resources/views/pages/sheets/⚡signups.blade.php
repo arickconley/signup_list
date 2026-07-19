@@ -207,6 +207,34 @@ new #[Layout('layouts.app', ['robots' => 'noindex, nofollow'])] #[Title('Signup 
         </div>
     </div>
 
+    <form
+        method="GET"
+        action="{{ route('sheets.signups.print', $sheet, absolute: false) }}"
+        target="_blank"
+        class="mt-4 grid gap-4 rounded-2xl border border-stone-200 bg-white p-4 shadow-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end dark:border-stone-800 dark:bg-stone-900"
+    >
+        <fieldset class="grid gap-4 sm:grid-cols-3">
+            <legend class="text-xs font-bold uppercase tracking-[0.16em] text-stone-500 sm:col-span-3 dark:text-stone-400">{{ __('Print View options') }}</legend>
+            <div>
+                <label for="print-grouping" class="block text-sm font-semibold">{{ __('Group by') }}</label>
+                <select id="print-grouping" name="group" class="mt-2 min-h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 dark:border-stone-700 dark:bg-stone-950">
+                    <option value="participant" @selected($grouping === 'participant')>{{ __('Participant') }}</option>
+                    <option value="option" @selected($grouping === 'option')>{{ __('Option') }}</option>
+                </select>
+            </div>
+            <div class="flex min-h-11 items-center gap-3 sm:self-end">
+                <input id="print-email" type="checkbox" name="email" value="1" class="size-5 rounded border-stone-300 text-teal-700 focus:ring-teal-600 dark:border-stone-700 dark:bg-stone-950">
+                <label for="print-email" class="text-sm font-semibold">{{ __('Show email') }}</label>
+            </div>
+            <div class="flex min-h-11 items-center gap-3 sm:self-end">
+                <input id="print-phone" type="checkbox" name="phone" value="1" class="size-5 rounded border-stone-300 text-teal-700 focus:ring-teal-600 dark:border-stone-700 dark:bg-stone-950">
+                <label for="print-phone" class="text-sm font-semibold">{{ __('Show phone') }}</label>
+            </div>
+        </fieldset>
+
+        <x-ui.button type="submit">{{ __('Open Print View') }}</x-ui.button>
+    </form>
+
     @error('removal')
         <p role="alert" class="mt-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm font-semibold text-red-900 dark:border-red-800 dark:bg-red-950/50 dark:text-red-200">{{ $message }}</p>
     @enderror
