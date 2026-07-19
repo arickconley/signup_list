@@ -1,7 +1,9 @@
+@props(['title' => null, 'robots' => null])
+
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
-        @include('partials.head')
+        @include('partials.head', ['robots' => $robots])
     </head>
     <body>
         <div class="min-h-screen lg:flex" x-data="{ navOpen: false }" x-on:keydown.escape.window="navOpen = false">

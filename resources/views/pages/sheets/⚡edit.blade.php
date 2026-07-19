@@ -485,6 +485,11 @@ new #[Title('Edit Draft Sheet')] class extends Component
                 <a href="{{ url('/sheets/'.$sheet->public_id) }}" class="mt-4 inline-flex min-h-11 items-center rounded-lg font-semibold text-teal-700 underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 dark:text-teal-400">
                     {{ url('/sheets/'.$sheet->public_id) }}
                 </a>
+                <div class="mt-5 border-t border-stone-200 pt-5 dark:border-stone-800">
+                    <a href="{{ route('sheets.signups', $sheet, absolute: false) }}" wire:navigate class="inline-flex min-h-11 items-center justify-center rounded-lg bg-teal-700 px-4 text-sm font-semibold text-white shadow-sm hover:bg-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2 dark:bg-teal-500 dark:text-stone-950 dark:hover:bg-teal-400">
+                        {{ __('View Signups') }}
+                    </a>
+                </div>
             @else
                 <h2 id="publishing-title" class="font-display text-2xl font-semibold">{{ __('Ready to publish?') }}</h2>
                 <p class="mt-2 text-sm text-stone-600 dark:text-stone-400">{{ __('Publishing makes the shareable link available.') }}</p>
