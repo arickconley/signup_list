@@ -5,8 +5,51 @@ use App\Models\OptionClaim;
 use App\Models\Sheet;
 use App\Models\Signup;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Blade;
 use Livewire\Livewire;
+
+test('Sheet lifecycle predicates honor manual state and the exact deadline boundary', function (
+    string $state,
+    string $deadline,
+    array $expected,
+) {
+    $this->travelTo(Carbon::parse('2026-08-01 19:00:00 UTC'));
+
+    $owner = Account::factory()->create(['timezone' => 'America/Los_Angeles']);
+    $sheet = Sheet::factory()->for($owner, 'owner')->create([
+        'state' => $state,
+        'deadline_at' => Carbon::parse($deadline),
+    ]);
+
+    expect([
+        'open' => $sheet->isOpen(),
+        'closed' => $sheet->isClosed(),
+        'archived' => $sheet->isArchived(),
+        'publicly_viewable' => $sheet->isPubliclyViewable(),
+    ])->toBe($expected);
+})->with([
+    'Published Sheet before deadline' => [
+        Sheet::STATE_PUBLISHED,
+        '2026-08-01 19:00:01 UTC',
+        ['open' => true, 'closed' => false, 'archived' => false, 'publicly_viewable' => true],
+    ],
+    'deadline boundary' => [
+        Sheet::STATE_PUBLISHED,
+        '2026-08-01 19:00:00 UTC',
+        ['open' => false, 'closed' => true, 'archived' => false, 'publicly_viewable' => true],
+    ],
+    'manually Closed Sheet' => [
+        'closed',
+        '2026-08-01 20:00:00 UTC',
+        ['open' => false, 'closed' => true, 'archived' => false, 'publicly_viewable' => true],
+    ],
+    'Archived Sheet' => [
+        Sheet::STATE_ARCHIVED,
+        '2026-08-01 20:00:00 UTC',
+        ['open' => false, 'closed' => false, 'archived' => true, 'publicly_viewable' => false],
+    ],
+]);
 
 test('Signup Sheet acceptance requires Published Open Participation before its deadline', function (array $attributes, bool $expected) {
     $sheet = Sheet::factory()->create([

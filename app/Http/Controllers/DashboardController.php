@@ -21,6 +21,10 @@ class DashboardController extends Controller
                 ->where('state', Sheet::STATE_DRAFT)
                 ->latest()
                 ->get(),
+            'archivedSheets' => $account->ownedSheets()
+                ->where('state', Sheet::STATE_ARCHIVED)
+                ->latest()
+                ->get(),
             'attachedSignups' => $account->signups()
                 ->whereHas('sheet', function (Builder $query): void {
                     $query->where('state', '!=', Sheet::STATE_ARCHIVED);

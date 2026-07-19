@@ -95,26 +95,47 @@ test('Published Sheet shows localized details and its open state', function () {
         ->assertSee('Open for signups');
 });
 
-test('Published Sheet reports a passed deadline as closed in text', function () {
+test('Published Sheet UUID remains viewable but exposes no signup or edit path at and after its deadline', function (string $deadline) {
     $this->travelTo(Carbon::parse('2026-09-05 12:00:00 UTC'));
 
-    $sheet = Sheet::factory()->create([
-        'state' => Sheet::STATE_PUBLISHED,
-        'selection_maximum' => 1,
-        'deadline_at' => Carbon::parse('2026-09-05 11:59:00 UTC'),
-    ]);
-    $sheet->options()->create([
-        'name' => 'Already closed',
-        'capacity' => 1,
-        'position' => 1,
-    ]);
+    try {
+        $owner = Account::factory()->create(['timezone' => 'America/Los_Angeles']);
+        $sheet = Sheet::factory()->for($owner, 'owner')->create([
+            'title' => 'Closed boundary field day',
+            'description' => 'Public event details remain reviewable.',
+            'state' => Sheet::STATE_PUBLISHED,
+            'selection_maximum' => 1,
+            'deadline_at' => Carbon::parse($deadline),
+            'timezone' => 'America/Los_Angeles',
+        ]);
+        $sheet->options()->create([
+            'name' => 'Already closed',
+            'capacity' => 1,
+            'position' => 1,
+        ]);
+        $signup = $sheet->signups()->create(['name_snapshot' => 'Private Participant']);
 
-    $this->get('/sheets/'.$sheet->public_id)
-        ->assertOk()
-        ->assertSee('Closed to signups')
-        ->assertDontSee('Open for signups')
-        ->assertSeeHtml('role="status"');
-});
+        $this->get('/sheets/'.$sheet->public_id)
+            ->assertOk()
+            ->assertHeader('X-Robots-Tag', 'noindex, nofollow')
+            ->assertSeeHtml('<meta name="robots" content="noindex, nofollow">')
+            ->assertSee('Closed boundary field day')
+            ->assertSee('Public event details remain reviewable.')
+            ->assertSee('Closed to signups')
+            ->assertDontSee('Open for signups')
+            ->assertSeeHtml('role="status"')
+            ->assertDontSeeHtml('wire:submit="complete"')
+            ->assertDontSee('Complete Signup')
+            ->assertDontSeeHtml('href="'.route('sheets.edit', $sheet, absolute: false).'"')
+            ->assertDontSeeHtml('href="'.route('signups.edit', $signup, absolute: false).'"')
+            ->assertDontSee('Private Participant');
+    } finally {
+        $this->travelBack();
+    }
+})->with([
+    'exact deadline boundary' => '2026-09-05 12:00:00 UTC',
+    'past deadline' => '2026-09-05 11:59:00 UTC',
+]);
 
 test('Published Sheet lists Options in Owner order with capacity totals', function () {
     $sheet = Sheet::factory()->create([

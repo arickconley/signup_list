@@ -299,6 +299,7 @@ test('unauthorized Account and non-editable Signup lifecycle reject without chan
             'email_snapshot' => null,
         ])->save(),
         'Draft Sheet' => $sheet->update(['state' => Sheet::STATE_DRAFT]),
+        'Closed Sheet' => $sheet->update(['state' => Sheet::STATE_CLOSED]),
         'Archived Sheet' => $sheet->update(['state' => Sheet::STATE_ARCHIVED]),
         'deadline passed' => $sheet->update(['deadline_at' => now()->subMinute()]),
     };
@@ -327,6 +328,7 @@ test('unauthorized Account and non-editable Signup lifecycle reject without chan
     'Pending Account Association',
     'Unregistered Participant',
     'Draft Sheet',
+    'Closed Sheet',
     'Archived Sheet',
     'deadline passed',
 ]);

@@ -427,6 +427,43 @@ test('other Account cannot view or mutate a Published Sheet editor', function ()
         ->and($option->refresh()->capacity)->toBe(2);
 });
 
+test('other Account cannot invoke Owner Sheet lifecycle actions', function (string $action, string $initialState) {
+    $this->travelTo(Carbon::parse('2026-08-01 19:00:00 UTC'));
+
+    try {
+        $owner = Account::factory()->create(['timezone' => 'America/Los_Angeles']);
+        $otherAccount = Account::factory()->create(['timezone' => 'America/Los_Angeles']);
+        $sheet = Sheet::factory()->for($owner, 'owner')->create([
+            'state' => $initialState,
+            'deadline_at' => Carbon::parse('2026-08-02 19:00:00 UTC'),
+            'timezone' => 'America/Los_Angeles',
+        ]);
+        $originalDeadline = $sheet->deadline_at->toIso8601String();
+
+        $component = Livewire::actingAs($owner)
+            ->test('pages::sheets.edit', ['sheet' => $sheet]);
+
+        if ($action === 'reopenSheet') {
+            $component->set('deadlineAt', '2026-08-03T12:00');
+        }
+
+        $this->actingAs($otherAccount);
+        $component
+            ->call($action)
+            ->assertStatus(404);
+
+        expect($sheet->refresh())
+            ->state->toBe($initialState)
+            ->deadline_at->toIso8601String()->toBe($originalDeadline);
+    } finally {
+        $this->travelBack();
+    }
+})->with([
+    'manual close' => ['closeSheet', Sheet::STATE_PUBLISHED],
+    'future-deadline reopen' => ['reopenSheet', Sheet::STATE_CLOSED],
+    'irreversible archive' => ['archiveSheet', Sheet::STATE_PUBLISHED],
+]);
+
 test('Published deadline edits immediately close and reopen participant actions', function () {
     $this->travelTo(Carbon::parse('2026-08-01 12:00:00 UTC'));
 
@@ -493,4 +530,130 @@ test('Published deadline edits immediately close and reopen participant actions'
     expect($signup->refresh()->id)->toBe($signup->id)
         ->and($signup->optionClaims()->sole()->id)->toBe($claim->id)
         ->and($option->refresh()->claimed_count)->toBe(2);
+});
+
+test('Owner manually closes a Published Sheet before its deadline and new Signups are rejected', function () {
+    $this->travelTo(Carbon::parse('2026-08-01 19:00:00 UTC'));
+
+    $owner = Account::factory()->create(['timezone' => 'America/Los_Angeles']);
+    $sheet = Sheet::factory()->for($owner, 'owner')->create([
+        'title' => 'Manual close field day',
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_OPEN,
+        'selection_maximum' => 1,
+        'deadline_at' => Carbon::parse('2026-08-02 19:00:00 UTC'),
+    ]);
+    $option = $sheet->options()->create([
+        'name' => 'Morning setup',
+        'capacity' => 2,
+        'position' => 1,
+    ]);
+
+    Livewire::actingAs($owner)
+        ->test('pages::sheets.edit', ['sheet' => $sheet])
+        ->assertSee('Close Sheet')
+        ->call('closeSheet')
+        ->assertHasNoErrors()
+        ->assertSee('Signup Sheet closed.');
+
+    expect($sheet->refresh()->state)->toBe(Sheet::STATE_CLOSED);
+
+    $this->get(route('sheets.show', $sheet))
+        ->assertOk()
+        ->assertSee('Manual close field day')
+        ->assertSee('Closed to signups')
+        ->assertDontSee('Open for signups');
+
+    expect(fn () => app(CompleteOpenSignup::class)->handle(new CompleteSignupInput(
+        sheetPublicId: $sheet->public_id,
+        name: 'Blocked participant',
+        phone: null,
+        optionPublicIds: [$option->public_id],
+    )))->toThrow(CannotCompleteSignup::class, 'no longer open')
+        ->and($sheet->signups()->count())->toBe(0);
+});
+
+test('Owner reopens a Closed Sheet with a future deadline in their timezone', function () {
+    $this->travelTo(Carbon::parse('2026-08-01 19:00:00 UTC'));
+
+    $owner = Account::factory()->create(['timezone' => 'America/Los_Angeles']);
+    $sheet = Sheet::factory()->for($owner, 'owner')->create([
+        'title' => 'Reopened field day',
+        'state' => Sheet::STATE_CLOSED,
+        'participation_policy' => Sheet::PARTICIPATION_OPEN,
+        'selection_maximum' => 1,
+        'deadline_at' => Carbon::parse('2026-07-31 19:00:00 UTC'),
+    ]);
+    $option = $sheet->options()->create([
+        'name' => 'Afternoon cleanup',
+        'capacity' => 2,
+        'position' => 1,
+    ]);
+
+    Livewire::actingAs($owner)
+        ->test('pages::sheets.edit', ['sheet' => $sheet])
+        ->assertSee('Closed Sheet')
+        ->assertSee('Reopen Sheet')
+        ->set('deadlineAt', '2026-08-02T12:00')
+        ->call('reopenSheet')
+        ->assertHasNoErrors()
+        ->assertSee('Signup Sheet reopened.');
+
+    expect($sheet->refresh())
+        ->state->toBe(Sheet::STATE_PUBLISHED)
+        ->deadline_at->toIso8601String()->toBe('2026-08-02T19:00:00+00:00');
+
+    $this->get(route('sheets.show', $sheet))
+        ->assertOk()
+        ->assertSee('Open for signups')
+        ->assertDontSee('Closed to signups');
+
+    app(CompleteOpenSignup::class)->handle(new CompleteSignupInput(
+        sheetPublicId: $sheet->public_id,
+        name: 'After reopen',
+        phone: null,
+        optionPublicIds: [$option->public_id],
+    ));
+
+    expect($sheet->signups()->count())->toBe(1);
+});
+
+test('Owner irreversibly archives a Published Sheet and its public UUID becomes generically unavailable', function () {
+    $this->travelTo(Carbon::parse('2026-08-01 19:00:00 UTC'));
+
+    $owner = Account::factory()->create(['timezone' => 'America/Los_Angeles']);
+    $sheet = Sheet::factory()->for($owner, 'owner')->create([
+        'title' => 'Private archived harvest details',
+        'description' => 'Private participant planning notes',
+        'state' => Sheet::STATE_PUBLISHED,
+        'deadline_at' => Carbon::parse('2026-08-02 19:00:00 UTC'),
+    ]);
+
+    Livewire::actingAs($owner)
+        ->test('pages::sheets.edit', ['sheet' => $sheet])
+        ->assertSee('Archive Sheet')
+        ->assertSeeHtml('wire:confirm="Archive this Signup Sheet? This cannot be undone."')
+        ->call('archiveSheet')
+        ->assertHasNoErrors()
+        ->assertRedirect(route('dashboard'));
+
+    expect($sheet->refresh()->state)->toBe(Sheet::STATE_ARCHIVED);
+
+    $archivedResponse = $this->get(route('sheets.show', $sheet));
+    $unknownResponse = $this->get('/sheets/00000000-0000-4000-8000-000000000000');
+
+    $archivedResponse
+        ->assertNotFound()
+        ->assertHeader('X-Robots-Tag', 'noindex, nofollow')
+        ->assertSee('This signup sheet is unavailable.')
+        ->assertDontSee('Private archived harvest details')
+        ->assertDontSee('Private participant planning notes');
+    $unknownResponse
+        ->assertNotFound()
+        ->assertHeader('X-Robots-Tag', 'noindex, nofollow')
+        ->assertSee('This signup sheet is unavailable.');
+
+    expect($archivedResponse->getContent())->toBe($unknownResponse->getContent());
+
+    $this->get(route('sheets.edit', $sheet))->assertNotFound();
 });

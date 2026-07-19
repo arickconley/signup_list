@@ -53,6 +53,8 @@ class Sheet extends Model
 
     public const string STATE_PUBLISHED = 'published';
 
+    public const string STATE_CLOSED = 'closed';
+
     public const string STATE_ARCHIVED = 'archived';
 
     public const string PARTICIPATION_OPEN = 'open';
@@ -95,26 +97,48 @@ class Sheet extends Model
 
     public function isAcceptingOpenParticipationSignups(): bool
     {
-        return $this->state === self::STATE_PUBLISHED
-            && $this->participation_policy === self::PARTICIPATION_OPEN
-            && $this->deadline_at->isFuture();
+        return $this->isOpen()
+            && $this->participation_policy === self::PARTICIPATION_OPEN;
     }
 
     public function isAcceptingVerifiedParticipationSignups(): bool
     {
-        return $this->state === self::STATE_PUBLISHED
-            && $this->participation_policy === self::PARTICIPATION_VERIFIED
-            && $this->deadline_at->isFuture();
+        return $this->isOpen()
+            && $this->participation_policy === self::PARTICIPATION_VERIFIED;
     }
 
     public function isAcceptingParticipantEdits(): bool
     {
-        return $this->state === self::STATE_PUBLISHED
+        return $this->isOpen()
             && in_array($this->participation_policy, [
                 self::PARTICIPATION_OPEN,
                 self::PARTICIPATION_VERIFIED,
-            ], true)
+            ], true);
+    }
+
+    public function isOpen(): bool
+    {
+        return $this->state === self::STATE_PUBLISHED
             && $this->deadline_at->isFuture();
+    }
+
+    public function isClosed(): bool
+    {
+        return $this->state === self::STATE_CLOSED
+            || ($this->state === self::STATE_PUBLISHED && ! $this->deadline_at->isFuture());
+    }
+
+    public function isArchived(): bool
+    {
+        return $this->state === self::STATE_ARCHIVED;
+    }
+
+    public function isPubliclyViewable(): bool
+    {
+        return in_array($this->state, [
+            self::STATE_PUBLISHED,
+            self::STATE_CLOSED,
+        ], true);
     }
 
     public function getRouteKeyName(): string

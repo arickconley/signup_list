@@ -82,6 +82,7 @@ test('unauthorized Account and non-cancellable Signup lifecycle preserve Signup 
             'email_snapshot' => null,
         ])->save(),
         'Draft Sheet' => $sheet->update(['state' => Sheet::STATE_DRAFT]),
+        'Closed Sheet' => $sheet->update(['state' => Sheet::STATE_CLOSED]),
         'Archived Sheet' => $sheet->update(['state' => Sheet::STATE_ARCHIVED]),
         'deadline passed' => $sheet->update(['deadline_at' => now()->subMinute()]),
     };
@@ -109,6 +110,7 @@ test('unauthorized Account and non-cancellable Signup lifecycle preserve Signup 
     'Pending Account Association',
     'Unregistered Participant',
     'Draft Sheet',
+    'Closed Sheet',
     'Archived Sheet',
     'deadline passed',
 ]);

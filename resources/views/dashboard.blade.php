@@ -11,7 +11,7 @@
             </a>
         </div>
 
-        @if ($drafts->isEmpty() && $attachedSignups->isEmpty())
+        @if ($drafts->isEmpty() && $archivedSheets->isEmpty() && $attachedSignups->isEmpty())
             <section class="paper-grid mt-8 rounded-2xl border border-dashed border-stone-300 bg-stone-50 px-6 py-14 text-center dark:border-stone-700 dark:bg-stone-900/60" aria-labelledby="empty-sheets-title">
                 <span class="mx-auto flex size-14 items-center justify-center rounded-2xl bg-amber-200 text-amber-950 shadow-sm dark:bg-amber-300">
                     <x-app-logo-icon class="size-8" />
@@ -31,6 +31,23 @@
                             <h3 class="mt-2 font-display text-xl font-semibold">{{ $draft->title }}</h3>
                             <span class="mt-4 inline-block text-sm font-semibold text-stone-600 dark:text-stone-300">{{ __('Resume editing') }}</span>
                         </a>
+                    @endforeach
+                </div>
+            </section>
+        @endif
+
+        @if ($archivedSheets->isNotEmpty())
+            <section class="mt-10" aria-labelledby="archived-sheets-title">
+                <h2 id="archived-sheets-title" class="font-display text-2xl font-semibold">{{ __('Archived Signup Sheets') }}</h2>
+                <div class="mt-4 grid gap-4 sm:grid-cols-2">
+                    @foreach ($archivedSheets as $archivedSheet)
+                        <article class="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm dark:border-stone-800 dark:bg-stone-900">
+                            <span class="text-xs font-bold uppercase tracking-[0.16em] text-stone-600 dark:text-stone-400">{{ __('Archived') }}</span>
+                            <h3 class="mt-2 font-display text-xl font-semibold">{{ $archivedSheet->title }}</h3>
+                            <div class="mt-4">
+                                <x-ui.link :href="route('sheets.signups', $archivedSheet, absolute: false)" wire:navigate>{{ __('View Signups') }}</x-ui.link>
+                            </div>
+                        </article>
                     @endforeach
                 </div>
             </section>

@@ -17,6 +17,34 @@ test('authenticated accounts can visit the dashboard', function () {
     $response->assertOk();
 });
 
+test('Owner dashboard lists only their archived Signup Sheets as private records', function () {
+    $owner = Account::factory()->create();
+    $otherAccount = Account::factory()->create();
+    $archivedSheet = Sheet::factory()->create([
+        'owner_id' => $owner->id,
+        'title' => 'Archived Neighborhood Supper',
+        'state' => Sheet::STATE_ARCHIVED,
+    ]);
+    $otherArchivedSheet = Sheet::factory()->create([
+        'owner_id' => $otherAccount->id,
+        'title' => 'Other Owner Archived Supper',
+        'state' => Sheet::STATE_ARCHIVED,
+    ]);
+
+    $this->actingAs($owner)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertSee('Archived Signup Sheets')
+        ->assertSee('Archived Neighborhood Supper')
+        ->assertSee('Archived')
+        ->assertSee('View Signups')
+        ->assertSeeHtml('href="'.route('sheets.signups', $archivedSheet, absolute: false).'"')
+        ->assertDontSee('Other Owner Archived Supper')
+        ->assertDontSeeHtml('href="'.route('sheets.edit', $archivedSheet, absolute: false).'"')
+        ->assertDontSee('Restore Sheet')
+        ->assertDontSee('Delete Sheet');
+});
+
 test('newly verified Accounts missing required profile details are guided to profile settings', function () {
     $account = Account::factory()->passwordless()->create(['name' => null]);
 

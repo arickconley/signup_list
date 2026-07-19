@@ -54,6 +54,7 @@ new #[Title('Edit Signup Sheet')] class extends Component
     {
         abort_unless($sheet->owner_id === Auth::id(), 404);
         $sheet->refresh();
+        abort_if($sheet->isArchived(), 404);
 
         $this->sheet = $sheet;
         $this->title = $sheet->title;
@@ -223,6 +224,7 @@ new #[Title('Edit Signup Sheet')] class extends Component
     public function publish(): void
     {
         $this->authorizeOwner();
+        abort_unless($this->sheet->state === Sheet::STATE_DRAFT, 404);
         $this->normalizeDetails();
 
         $this->withValidator(function (Validator $validator): void {
@@ -248,6 +250,88 @@ new #[Title('Edit Signup Sheet')] class extends Component
 
         session()->flash('success', __('Signup Sheet published.'));
         $this->announcement = __('Signup Sheet published.');
+    }
+
+    public function closeSheet(): void
+    {
+        $this->authorizeOwner();
+
+        $closed = Sheet::query()
+            ->whereKey($this->sheet->id)
+            ->where('owner_id', Auth::id())
+            ->where('state', Sheet::STATE_PUBLISHED)
+            ->update(['state' => Sheet::STATE_CLOSED]);
+
+        $this->sheet->refresh();
+
+        if ($closed !== 1) {
+            return;
+        }
+
+        session()->flash('success', __('Signup Sheet closed.'));
+        $this->announcement = __('Signup Sheet closed.');
+    }
+
+    public function reopenSheet(): void
+    {
+        $this->authorizeOwner();
+        $this->sheet->refresh();
+        $this->deadlineAt = trim($this->deadlineAt);
+        $this->validate([
+            'deadlineAt' => ['required', 'date_format:Y-m-d\TH:i'],
+        ]);
+
+        $deadline = Carbon::parse($this->deadlineAt, $this->sheet->timezone)->utc();
+
+        if (! $deadline->isFuture()) {
+            $message = __('Choose a future deadline to reopen this Signup Sheet.');
+            $this->addError('deadlineAt', $message);
+            $this->announcement = $message;
+
+            return;
+        }
+
+        $reopened = Sheet::query()
+            ->whereKey($this->sheet->id)
+            ->where('owner_id', Auth::id())
+            ->where('state', Sheet::STATE_CLOSED)
+            ->update([
+                'state' => Sheet::STATE_PUBLISHED,
+                'deadline_at' => $deadline,
+            ]);
+
+        $this->sheet->refresh();
+
+        if ($reopened !== 1) {
+            return;
+        }
+
+        session()->flash('success', __('Signup Sheet reopened.'));
+        $this->announcement = __('Signup Sheet reopened.');
+    }
+
+    public function archiveSheet(): void
+    {
+        $this->authorizeOwner();
+        $this->sheet->refresh();
+
+        $archived = Sheet::query()
+            ->whereKey($this->sheet->id)
+            ->where('owner_id', Auth::id())
+            ->whereIn('state', [
+                Sheet::STATE_PUBLISHED,
+                Sheet::STATE_CLOSED,
+            ])
+            ->update(['state' => Sheet::STATE_ARCHIVED]);
+
+        $this->sheet->refresh();
+
+        if ($archived !== 1) {
+            return;
+        }
+
+        session()->flash('success', __('Signup Sheet archived. This cannot be undone.'));
+        $this->redirectRoute('dashboard', navigate: true);
     }
 
     public function duplicate(DuplicateSheet $duplicateSheet): void
@@ -355,7 +439,10 @@ new #[Title('Edit Signup Sheet')] class extends Component
     {
         $this->sheet->refresh();
 
-        abort_unless($this->sheet->owner_id === Auth::id(), 404);
+        abort_unless(
+            $this->sheet->owner_id === Auth::id() && ! $this->sheet->isArchived(),
+            404,
+        );
     }
 };
 
@@ -364,7 +451,12 @@ new #[Title('Edit Signup Sheet')] class extends Component
 <x-layouts::app :title="$sheet->title">
     <div class="mx-auto max-w-3xl">
         <p class="text-xs font-bold uppercase tracking-[0.18em] text-teal-700 dark:text-teal-400">
-            {{ $sheet->state === Sheet::STATE_PUBLISHED ? __('Published Sheet') : __('Draft Sheet') }}
+            {{ match ($sheet->state) {
+                Sheet::STATE_PUBLISHED => __('Published Sheet'),
+                Sheet::STATE_CLOSED => __('Closed Sheet'),
+                Sheet::STATE_ARCHIVED => __('Archived Sheet'),
+                default => __('Draft Sheet'),
+            } }}
         </p>
         <h1 class="mt-2 font-display text-4xl font-semibold tracking-tight">{{ $sheet->title }}</h1>
 
@@ -598,7 +690,7 @@ new #[Title('Edit Signup Sheet')] class extends Component
         </section>
 
         <section class="mt-8 rounded-2xl border border-stone-200 bg-white p-6 shadow-sm dark:border-stone-800 dark:bg-stone-900" aria-labelledby="publishing-title">
-            @if ($sheet->state === Sheet::STATE_PUBLISHED)
+            @if ($sheet->isPubliclyViewable())
                 <h2 id="publishing-title" class="font-display text-2xl font-semibold">{{ __('Shareable link') }}</h2>
                 <p class="mt-2 text-sm text-stone-600 dark:text-stone-400">{{ __('Share this link with participants.') }}</p>
                 <a href="{{ url('/sheets/'.$sheet->public_id) }}" class="mt-4 inline-flex min-h-11 items-center rounded-lg font-semibold text-teal-700 underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 dark:text-teal-400">
@@ -621,6 +713,17 @@ new #[Title('Edit Signup Sheet')] class extends Component
 
         <section class="mt-8 rounded-2xl border border-stone-200 bg-white p-6 shadow-sm dark:border-stone-800 dark:bg-stone-900" aria-labelledby="sheet-actions-title">
             <h2 id="sheet-actions-title" class="font-display text-2xl font-semibold">{{ __('Sheet actions') }}</h2>
+            @if ($sheet->state === Sheet::STATE_PUBLISHED)
+                <p class="mt-2 text-sm text-stone-600 dark:text-stone-400">{{ __('Stop new Signups while keeping the shareable link available to review.') }}</p>
+                <x-ui.button wire:click="closeSheet" wire:confirm="{{ __('Close this Signup Sheet?') }}" variant="danger" class="mt-4">{{ __('Close Sheet') }}</x-ui.button>
+            @elseif ($sheet->state === Sheet::STATE_CLOSED)
+                <p class="mt-2 text-sm text-stone-600 dark:text-stone-400">{{ __('Set a future Signup deadline above before reopening this Sheet.') }}</p>
+                <x-ui.button wire:click="reopenSheet" variant="outline" class="mt-4">{{ __('Reopen Sheet') }}</x-ui.button>
+            @endif
+            @if (in_array($sheet->state, [Sheet::STATE_PUBLISHED, Sheet::STATE_CLOSED], true))
+                <p class="mt-4 text-sm text-stone-600 dark:text-stone-400">{{ __('Move this Signup Sheet to archived records. Archiving cannot be undone.') }}</p>
+                <x-ui.button wire:click="archiveSheet" wire:confirm="{{ __('Archive this Signup Sheet? This cannot be undone.') }}" variant="danger" class="mt-4">{{ __('Archive Sheet') }}</x-ui.button>
+            @endif
             <p class="mt-2 text-sm text-stone-600 dark:text-stone-400">{{ __('Start a new Draft Sheet using this Signup Sheet’s content and settings.') }}</p>
             <x-ui.button wire:click="duplicate" variant="outline" class="mt-4">{{ __('Duplicate Sheet') }}</x-ui.button>
         </section>
