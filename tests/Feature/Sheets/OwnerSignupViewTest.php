@@ -1,8 +1,11 @@
 <?php
 
 use App\Models\Account;
+use App\Models\OptionClaim;
 use App\Models\Sheet;
+use App\Models\Signup;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Mail;
 use Livewire\Livewire;
 
 test('only the Owner can open the Signup View and it cannot be indexed', function () {
@@ -315,3 +318,99 @@ test('another Account cannot rehydrate an Owner Signup View component', function
 
     $component->call('showOptionGrouping')->assertNotFound();
 });
+
+test('Owner explicitly confirms one-claim removal and sees updated capacity totals', function () {
+    $owner = Account::factory()->create();
+    $sheet = Sheet::factory()->for($owner, 'owner')->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'selection_maximum' => 1,
+    ]);
+    $option = $sheet->options()->create([
+        'name' => 'Welcome table',
+        'capacity' => 2,
+        'claimed_count' => 1,
+        'position' => 1,
+    ]);
+    $signup = $sheet->signups()->create(['name_snapshot' => 'Submitted Name']);
+    $claim = $signup->optionClaims()->create(['option_id' => $option->id]);
+
+    Livewire::actingAs($owner)
+        ->test('pages::sheets.signups', ['sheet' => $sheet])
+        ->call('showOptionGrouping')
+        ->assertSeeHtml('wire:click="removeOptionClaim('.$claim->id.')"')
+        ->assertSeeHtml('wire:confirm="Remove Welcome table from Submitted Name? This releases one capacity unit."')
+        ->assertSeeInOrder(['Claimed', '1', 'Remaining', '1'])
+        ->call('removeOptionClaim', $claim->id)
+        ->assertSet('announcement', 'Welcome table was removed from Submitted Name.')
+        ->assertSeeInOrder(['Claimed', '0', 'Remaining', '2'])
+        ->assertSee('No Signups claim this Option.');
+
+    expect(OptionClaim::query()->find($claim->id))->toBeNull();
+});
+
+test('Owner explicitly confirms whole-Signup removal and sees all totals update', function () {
+    $owner = Account::factory()->create();
+    $sheet = Sheet::factory()->for($owner, 'owner')->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'selection_maximum' => 2,
+    ]);
+    $first = $sheet->options()->create([
+        'name' => 'Setup',
+        'capacity' => 2,
+        'claimed_count' => 1,
+        'position' => 1,
+    ]);
+    $second = $sheet->options()->create([
+        'name' => 'Cleanup',
+        'capacity' => 2,
+        'claimed_count' => 1,
+        'position' => 2,
+    ]);
+    $signup = $sheet->signups()->create(['name_snapshot' => 'Submitted Name']);
+    $signup->optionClaims()->createMany([
+        ['option_id' => $first->id],
+        ['option_id' => $second->id],
+    ]);
+
+    Livewire::actingAs($owner)
+        ->test('pages::sheets.signups', ['sheet' => $sheet])
+        ->assertSeeHtml('wire:click="removeSignup('.$signup->id.')"')
+        ->assertSeeHtml('wire:confirm="Remove the entire Signup for Submitted Name? This releases all claimed capacity and cannot be undone."')
+        ->assertSeeInOrder(['Claimed', '2', 'Remaining', '2', 'Signups', '1'])
+        ->call('removeSignup', $signup->id)
+        ->assertSet('announcement', 'The Signup for Submitted Name was removed.')
+        ->assertSeeInOrder(['Claimed', '0', 'Remaining', '4', 'Signups', '0'])
+        ->assertSee('No Signups yet');
+
+    expect(Signup::query()->find($signup->id))->toBeNull();
+});
+
+test('Owner Signup View cannot remove a target from another owned Sheet', function (string $removal) {
+    Mail::fake();
+
+    $owner = Account::factory()->create();
+    $viewedSheet = Sheet::factory()->for($owner, 'owner')->create();
+    $targetSheet = Sheet::factory()->for($owner, 'owner')->create();
+    $option = $targetSheet->options()->create([
+        'name' => 'Other Sheet Option',
+        'capacity' => 2,
+        'claimed_count' => 1,
+        'position' => 1,
+    ]);
+    $signup = $targetSheet->signups()->create(['name_snapshot' => 'Other Sheet Participant']);
+    $claim = $signup->optionClaims()->create(['option_id' => $option->id]);
+    $component = Livewire::actingAs($owner)
+        ->test('pages::sheets.signups', ['sheet' => $viewedSheet]);
+
+    match ($removal) {
+        'Option Claim' => $component->call('removeOptionClaim', $claim->id),
+        'Signup' => $component->call('removeSignup', $signup->id),
+    };
+
+    $component->assertHasErrors(['removal']);
+
+    expect(Signup::query()->find($signup->id))->not->toBeNull()
+        ->and(OptionClaim::query()->find($claim->id))->not->toBeNull()
+        ->and($option->refresh()->claimed_count)->toBe(1);
+    Mail::assertNothingQueued();
+})->with(['Option Claim', 'Signup']);

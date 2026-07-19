@@ -78,6 +78,13 @@ final class ReplaceSignupClaims
         $this->remove($claims->all());
     }
 
+    public function releaseOne(OptionClaim $claim): void
+    {
+        $this->assertInsideTransaction();
+
+        $this->remove([$claim]);
+    }
+
     /**
      * @param  Collection<int, OptionClaim>  $currentClaims
      * @param  array<int, string>  $optionPublicIds

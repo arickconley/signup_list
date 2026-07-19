@@ -1,8 +1,15 @@
 <?php
 
+use App\Actions\RemoveOwnerOptionClaim;
+use App\Actions\RemoveOwnerSignup;
+use App\Exceptions\CannotRemoveOwnerOptionClaim;
+use App\Exceptions\CannotRemoveOwnerSignup;
+use App\Models\Account;
 use App\Models\Option;
+use App\Models\OptionClaim;
 use App\Models\Sheet;
 use App\Models\Signup;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
@@ -48,6 +55,70 @@ new #[Layout('layouts.app', ['robots' => 'noindex, nofollow'])] #[Title('Signup 
         $this->authorizeOwner();
         $this->grouping = 'option';
         $this->announcement = __('Signup View grouped by Option.');
+    }
+
+    public function removeOptionClaim(
+        int $optionClaimId,
+        RemoveOwnerOptionClaim $removeOwnerOptionClaim,
+    ): void {
+        $this->authorizeOwner();
+
+        $owner = Auth::user();
+        abort_unless($owner instanceof Account, 404);
+
+        $optionClaim = OptionClaim::query()
+            ->with(['option', 'signup'])
+            ->whereHas('signup', function (Builder $query): void {
+                $query->where('sheet_id', $this->sheet->id);
+            })
+            ->whereKey($optionClaimId)
+            ->first();
+
+        try {
+            $removeOwnerOptionClaim->handle($owner, $this->sheet, $optionClaimId);
+        } catch (CannotRemoveOwnerOptionClaim $exception) {
+            $this->addError('removal', $exception->getMessage());
+            $this->announcement = $exception->getMessage();
+
+            return;
+        }
+
+        unset($this->signups, $this->options);
+
+        $this->announcement = __(':option was removed from :participant.', [
+            'option' => $optionClaim?->option->name ?? __('The Option Claim'),
+            'participant' => $optionClaim?->signup->name_snapshot ?? __('the Signup'),
+        ]);
+    }
+
+    public function removeSignup(
+        int $signupId,
+        RemoveOwnerSignup $removeOwnerSignup,
+    ): void {
+        $this->authorizeOwner();
+
+        $owner = Auth::user();
+        abort_unless($owner instanceof Account, 404);
+
+        $signup = Signup::query()
+            ->where('sheet_id', $this->sheet->id)
+            ->whereKey($signupId)
+            ->first();
+
+        try {
+            $removeOwnerSignup->handle($owner, $this->sheet, $signupId);
+        } catch (CannotRemoveOwnerSignup $exception) {
+            $this->addError('removal', $exception->getMessage());
+            $this->announcement = $exception->getMessage();
+
+            return;
+        }
+
+        unset($this->signups, $this->options);
+
+        $this->announcement = __('The Signup for :participant was removed.', [
+            'participant' => $signup?->name_snapshot ?? __('the participant'),
+        ]);
     }
 
     /** @return Collection<int, Signup> */
@@ -135,6 +206,10 @@ new #[Layout('layouts.app', ['robots' => 'noindex, nofollow'])] #[Title('Signup 
             <p class="sr-only" role="status" aria-live="polite">{{ $announcement }}</p>
         </div>
     </div>
+
+    @error('removal')
+        <p role="alert" class="mt-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm font-semibold text-red-900 dark:border-red-800 dark:bg-red-950/50 dark:text-red-200">{{ $message }}</p>
+    @enderror
 
     @php
         $totalCapacity = $this->options->sum('capacity');
@@ -287,15 +362,39 @@ new #[Layout('layouts.app', ['robots' => 'noindex, nofollow'])] #[Title('Signup 
                                     @else
                                         <ul class="mt-3 space-y-2">
                                             @foreach ($claims as $claim)
-                                                <li class="flex items-start gap-2 text-sm font-semibold">
-                                                    <span class="mt-1 flex size-4 shrink-0 items-center justify-center rounded-full bg-teal-100 text-[0.65rem] text-teal-900 dark:bg-teal-900 dark:text-teal-100" aria-hidden="true">✓</span>
-                                                    <span>{{ $claim->option->name }}</span>
+                                                <li class="flex items-center justify-between gap-3 text-sm font-semibold">
+                                                    <span class="flex min-w-0 items-start gap-2">
+                                                        <span class="mt-1 flex size-4 shrink-0 items-center justify-center rounded-full bg-teal-100 text-[0.65rem] text-teal-900 dark:bg-teal-900 dark:text-teal-100" aria-hidden="true">✓</span>
+                                                        <span>{{ $claim->option->name }}</span>
+                                                    </span>
+                                                    <x-ui.button
+                                                        wire:click="removeOptionClaim({{ $claim->id }})"
+                                                        wire:confirm="{{ __('Remove :option from :participant? This releases one capacity unit.', ['option' => $claim->option->name, 'participant' => $signup->name_snapshot]) }}"
+                                                        wire:loading.attr="disabled"
+                                                        wire:target="removeOptionClaim({{ $claim->id }})"
+                                                        variant="danger"
+                                                        size="sm"
+                                                    >
+                                                        {{ __('Remove') }}
+                                                    </x-ui.button>
                                                 </li>
                                             @endforeach
                                         </ul>
                                     @endif
                                 </section>
                             </div>
+                            <footer class="flex justify-end border-t border-stone-200 px-5 py-4 dark:border-stone-800">
+                                <x-ui.button
+                                    wire:click="removeSignup({{ $signup->id }})"
+                                    wire:confirm="{{ __('Remove the entire Signup for :participant? This releases all claimed capacity and cannot be undone.', ['participant' => $signup->name_snapshot]) }}"
+                                    wire:loading.attr="disabled"
+                                    wire:target="removeSignup({{ $signup->id }})"
+                                    variant="danger"
+                                    size="sm"
+                                >
+                                    {{ __('Remove entire Signup') }}
+                                </x-ui.button>
+                            </footer>
                         </article>
                     </li>
                 @endforeach
@@ -356,16 +455,30 @@ new #[Layout('layouts.app', ['robots' => 'noindex, nofollow'])] #[Title('Signup 
                                                         </p>
                                                     @endif
                                                 </div>
-                                                <dl class="grid gap-3 text-sm sm:grid-cols-2">
-                                                    <div>
-                                                        <dt class="font-semibold text-stone-500 dark:text-stone-400">{{ __('Submitted email') }}</dt>
-                                                        <dd class="mt-0.5 break-words font-medium">{{ $claimingSignup->email_snapshot ?? __('Not submitted') }}</dd>
+                                                <div>
+                                                    <dl class="grid gap-3 text-sm sm:grid-cols-2">
+                                                        <div>
+                                                            <dt class="font-semibold text-stone-500 dark:text-stone-400">{{ __('Submitted email') }}</dt>
+                                                            <dd class="mt-0.5 break-words font-medium">{{ $claimingSignup->email_snapshot ?? __('Not submitted') }}</dd>
+                                                        </div>
+                                                        <div>
+                                                            <dt class="font-semibold text-stone-500 dark:text-stone-400">{{ __('Submitted phone') }}</dt>
+                                                            <dd class="mt-0.5 break-words font-medium">{{ $claimingSignup->phone_snapshot ?? __('Not submitted') }}</dd>
+                                                        </div>
+                                                    </dl>
+                                                    <div class="mt-4 flex justify-end">
+                                                        <x-ui.button
+                                                            wire:click="removeOptionClaim({{ $claim->id }})"
+                                                            wire:confirm="{{ __('Remove :option from :participant? This releases one capacity unit.', ['option' => $option->name, 'participant' => $claimingSignup->name_snapshot]) }}"
+                                                            wire:loading.attr="disabled"
+                                                            wire:target="removeOptionClaim({{ $claim->id }})"
+                                                            variant="danger"
+                                                            size="sm"
+                                                        >
+                                                            {{ __('Remove claim') }}
+                                                        </x-ui.button>
                                                     </div>
-                                                    <div>
-                                                        <dt class="font-semibold text-stone-500 dark:text-stone-400">{{ __('Submitted phone') }}</dt>
-                                                        <dd class="mt-0.5 break-words font-medium">{{ $claimingSignup->phone_snapshot ?? __('Not submitted') }}</dd>
-                                                    </div>
-                                                </dl>
+                                                </div>
                                             </li>
                                         @endforeach
                                     </ol>
