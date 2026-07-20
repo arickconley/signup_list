@@ -1,0 +1,70 @@
+services:
+  signup:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      APP_NAME: "${APP_NAME:-Signup Sheets}"
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_KEY: "${APP_KEY:?Set a generated Laravel application key}"
+      APP_URL: "${APP_URL:?Set the public HTTPS URL}"
+      APP_LOCALE: en
+      APP_FALLBACK_LOCALE: en
+      APP_MAINTENANCE_DRIVER: file
+      BCRYPT_ROUNDS: "12"
+      LOG_CHANNEL: stderr
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+      DB_CONNECTION: sqlite
+      DB_DATABASE: /srv/signup/database/database.sqlite
+      QUEUE_CONNECTION: database
+      CACHE_STORE: database
+      SESSION_DRIVER: database
+      SESSION_ENCRYPT: "true"
+      SESSION_SECURE_COOKIE: "true"
+      FILESYSTEM_DISK: local
+      HTTPS_TERMINATION: proxy
+      TRUSTED_PROXIES: REMOTE_ADDR
+      PERSISTENT_DISK_PATH: /srv/signup
+      WEB_INSTANCES: "1"
+      QUEUE_WORKERS: "1"
+      SCHEDULER_PROCESSES: "1"
+      SCHEDULER_HEARTBEAT_PATH: /srv/signup/scheduler-heartbeat.json
+      SCHEDULER_HEARTBEAT_MAX_AGE_MINUTES: "5"
+      MAIL_MAILER: smtp
+      MAIL_SCHEME: "${MAIL_SCHEME:-null}"
+      MAIL_HOST: "${MAIL_HOST:?Set the SMTP host}"
+      MAIL_PORT: "${MAIL_PORT:-587}"
+      MAIL_USERNAME: "${MAIL_USERNAME:?Set the SMTP username}"
+      MAIL_PASSWORD: "${MAIL_PASSWORD:?Set the SMTP password}"
+      MAIL_FROM_ADDRESS: "${MAIL_FROM_ADDRESS:?Set the verified sender address}"
+      MAIL_FROM_NAME: "${MAIL_FROM_NAME:-Signup Sheets}"
+      MAIL_PROVIDER: "${MAIL_PROVIDER:?Set the selected mail provider name}"
+      MAIL_SENDER_DOMAIN: "${MAIL_SENDER_DOMAIN:?Set the verified sender domain}"
+      SMOKE_TEST_EMAIL: "${SMOKE_TEST_EMAIL:?Set the smoke-test recipient}"
+      DISPOSABLE_EMAIL_BLOCKLIST_SOURCE_URL: "${DISPOSABLE_EMAIL_BLOCKLIST_SOURCE_URL:?Set the HTTPS blocklist source}"
+      DISPOSABLE_EMAIL_BLOCKLIST_UPDATE_SCHEDULE: "${DISPOSABLE_EMAIL_BLOCKLIST_UPDATE_SCHEDULE:-30 3 * * 1}"
+      BACKUP_DESTINATION: "${BACKUP_DESTINATION:-/srv/signup/backups}"
+      BACKUP_AGE_RECIPIENT: "${BACKUP_AGE_RECIPIENT:?Set the age encryption recipient}"
+      BACKUP_SCHEDULE: "${BACKUP_SCHEDULE:-15 3 * * *}"
+      BACKUP_RETENTION_DAYS: "${BACKUP_RETENTION_DAYS:-30}"
+      BACKUP_RESTORE_EVIDENCE_PATH: /srv/signup/restore-evidence.json
+      BACKUP_RESTORE_MAX_AGE_DAYS: "${BACKUP_RESTORE_MAX_AGE_DAYS:-90}"
+      SOURCE_CODE_REF: "${SOURCE_CODE_REF:?Set the deployed 40-character commit SHA}"
+      SOURCE_CODE_URL: "${SOURCE_CODE_URL:?Set the source URL for that commit}"
+      SOURCE_LICENSE_URL: "${SOURCE_LICENSE_URL:?Set the AGPL license URL for that commit}"
+    volumes:
+      - signup-data:/srv/signup
+    expose:
+      - "80"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "http://127.0.0.1/up"]
+      interval: 10s
+      timeout: 5s
+      start_period: 45s
+      retries: 6
+    restart: unless-stopped
+    stop_grace_period: 75s
+
+volumes:
+  signup-data:
