@@ -70,7 +70,7 @@ test('Verified Participation mount stays accessible without a pending candidate 
         $this->actingAs($account)
             ->get(route('sheets.participate', $sheet))
             ->assertOk()
-            ->assertSee('Complete Signup')
+            ->assertSee('Claim')
             ->assertSee($option->name);
 
         expect(Signup::query()->count())->toBe(0)
@@ -189,7 +189,7 @@ test('Verified Participation mount reports recoverable contention without changi
                 'The Signup Sheet is busy. Please wait a moment and try again.',
                 'The Signup Sheet is busy. Please wait a moment and try again.',
             ])
-            ->assertSee('Complete Signup');
+            ->assertSee('Claim');
 
         expect(Signup::query()->count())->toBe(1)
             ->and($signup->fresh()->only(array_keys($signupSnapshot)))->toBe($signupSnapshot)

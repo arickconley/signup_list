@@ -124,6 +124,90 @@ test('Verified Account completes one capacity-bearing Signup', function () {
         ->and($option->refresh()->claimed_count)->toBe(1);
 });
 
+test('Verified Account claims one Option immediately with Account defaults', function () {
+    $account = Account::factory()->create([
+        'name' => 'Account Default',
+        'email' => 'verified-claim@example.com',
+        'phone' => '555-0100',
+    ]);
+    $sheet = Sheet::factory()->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_VERIFIED,
+        'selection_maximum' => 1,
+    ]);
+    $option = $sheet->options()->create([
+        'name' => 'Immediate verified Option',
+        'capacity' => 1,
+        'position' => 1,
+    ]);
+
+    Livewire::actingAs($account)
+        ->test('complete-verified-signup', ['sheetPublicId' => $sheet->public_id])
+        ->assertSee('Immediate verified Option')
+        ->assertSee('Claim')
+        ->assertSee('Claim an available Option with your Account name.')
+        ->assertSeeHtml('id="name"')
+        ->assertSeeHtml('readonly="readonly"')
+        ->assertDontSeeHtml('name="selectedOptions[]"')
+        ->assertDontSee('Complete Signup')
+        ->call('claim', $option->public_id)
+        ->assertHasNoErrors()
+        ->assertSee('Your Signup is ready')
+        ->assertSet('announcement', 'Option claimed.');
+
+    $signup = Signup::query()->with('optionClaims')->sole();
+
+    expect($signup->name_snapshot)->toBe('Account Default')
+        ->and($signup->email_snapshot)->toBe('verified-claim@example.com')
+        ->and($signup->phone_snapshot)->toBe('555-0100')
+        ->and($signup->optionClaims)->toHaveCount(1)
+        ->and($option->refresh()->claimed_count)->toBe(1);
+});
+
+test('Verified Account immediately claims multiple Options into one Signup', function () {
+    $account = Account::factory()->create([
+        'name' => 'Multi-claim Account',
+        'email' => 'multi-claim@example.com',
+    ]);
+    $sheet = Sheet::factory()->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_VERIFIED,
+        'selection_maximum' => 2,
+    ]);
+    $firstOption = $sheet->options()->create([
+        'name' => 'First immediate Option',
+        'capacity' => 1,
+        'position' => 1,
+    ]);
+    $secondOption = $sheet->options()->create([
+        'name' => 'Second immediate Option',
+        'capacity' => 1,
+        'position' => 2,
+    ]);
+
+    $component = Livewire::actingAs($account)
+        ->test('complete-verified-signup', ['sheetPublicId' => $sheet->public_id])
+        ->call('claim', $firstOption->public_id)
+        ->assertHasNoErrors()
+        ->assertSee('First immediate Option')
+        ->assertSee('Second immediate Option')
+        ->assertSee('Claim');
+
+    $component
+        ->call('claim', $secondOption->public_id)
+        ->assertHasNoErrors()
+        ->assertSee('First immediate Option')
+        ->assertSee('Second immediate Option');
+
+    $signup = Signup::query()->with('optionClaims')->sole();
+
+    expect($signup->optionClaims)->toHaveCount(2)
+        ->and($signup->optionClaims->pluck('option_id')->sort()->values()->all())
+        ->toBe([$firstOption->id, $secondOption->id])
+        ->and($firstOption->refresh()->claimed_count)->toBe(1)
+        ->and($secondOption->refresh()->claimed_count)->toBe(1);
+});
+
 test('future verified Account Signup persists only consent for participant-visible fields', function () {
     $account = Account::factory()->create([
         'name' => 'Changed Account Default',
@@ -632,7 +716,7 @@ test('Verified Account reaches a Signup initialized from Account Defaults', func
         ->assertSet('phone', '555-0142')
         ->assertSee('Account email')
         ->assertSee('Verified setup')
-        ->assertSeeHtml('value="'.$option->public_id.'"');
+        ->assertSeeHtml('wire:click="claim(\''.$option->public_id.'\')"');
 });
 
 test('Authenticated participation route is one noindex document', function () {

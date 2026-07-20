@@ -12,7 +12,7 @@
         </header>
 
         <main id="main-content" tabindex="-1" class="mx-auto w-full max-w-6xl px-4 pb-16 pt-3 outline-none sm:px-6 sm:pb-24 sm:pt-8">
-            <article class="relative border border-stone-300 bg-amber-50/95 shadow-[0_26px_70px_-38px_rgba(28,25,23,0.75)] dark:border-stone-700 dark:bg-stone-900">
+            <article x-data class="relative border border-stone-300 bg-amber-50/95 shadow-[0_26px_70px_-38px_rgba(28,25,23,0.75)] dark:border-stone-700 dark:bg-stone-900">
                 <span class="absolute -top-3 start-1/2 h-6 w-28 -translate-x-1/2 -rotate-1 bg-amber-200/90 shadow-sm dark:bg-amber-700/80" aria-hidden="true"></span>
 
                 <header class="grid gap-8 border-b-2 border-stone-800 px-5 pb-8 pt-10 sm:px-9 sm:pb-10 sm:pt-12 lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-12 dark:border-stone-200">
@@ -87,6 +87,10 @@
                         <p class="text-sm text-stone-600 dark:text-stone-400">{{ trans_choice(':count option|:count options', $options->count(), ['count' => $options->count()]) }}</p>
                     </div>
 
+                    @if (session()->has('option-claimed'))
+                        <x-ui.callout class="mt-5" :heading="session('option-claimed')" />
+                    @endif
+
                     <ol class="divide-y divide-stone-300 border-b border-stone-400 dark:divide-stone-700 dark:border-stone-600">
                         @foreach ($options as $option)
                             @php
@@ -94,9 +98,12 @@
                                 $isOverCapacity = $option->claimed_count > $option->capacity;
                                 $isFull = $option->claimed_count === $option->capacity;
                                 $isAvailable = $isOpen && ! $isFull && ! $isOverCapacity;
+                                $isClaimedByParticipant = in_array($option->id, $participantClaimedOptionIds, true);
+                                $showsParticipantControl = $sheet->participation_policy === \App\Models\Sheet::PARTICIPATION_OPEN
+                                    && ($isAvailable || $isClaimedByParticipant);
                             @endphp
                             <li>
-                                <article class="grid gap-6 py-6 sm:grid-cols-[minmax(0,1fr)_20rem] sm:items-center sm:gap-8 sm:py-7" aria-labelledby="option-{{ $loop->iteration }}-name">
+                                <article class="grid gap-6 py-6 sm:grid-cols-[minmax(0,1fr)_28rem] sm:items-center sm:gap-8 sm:py-7" aria-labelledby="option-{{ $loop->iteration }}-name">
                                     <div class="min-w-0">
                                         <h3 id="option-{{ $loop->iteration }}-name" class="text-xl font-bold leading-tight sm:text-2xl">{{ $option->name }}</h3>
                                         <p @class([
@@ -123,20 +130,46 @@
                                         @endif
                                     </div>
 
-                                    <dl class="grid grid-cols-3 divide-x divide-stone-300 border-y border-stone-300 bg-white/55 text-center dark:divide-stone-700 dark:border-stone-700 dark:bg-stone-950/30" aria-label="{{ __('Capacity for :option', ['option' => $option->name]) }}">
-                                        <div class="px-2 py-3">
-                                            <dt class="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-stone-500 dark:text-stone-400">{{ __('Total') }}</dt>
-                                            <dd class="mt-1 font-mono text-xl font-bold tabular-nums">{{ $option->capacity }}</dd>
-                                        </div>
-                                        <div class="px-2 py-3">
-                                            <dt class="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-stone-500 dark:text-stone-400">{{ __('Claimed') }}</dt>
-                                            <dd class="mt-1 font-mono text-xl font-bold tabular-nums">{{ $option->claimed_count }}</dd>
-                                        </div>
-                                        <div class="px-2 py-3">
-                                            <dt class="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-stone-500 dark:text-stone-400">{{ __('Remaining') }}</dt>
-                                            <dd class="mt-1 font-mono text-xl font-bold tabular-nums">{{ $remaining }}</dd>
-                                        </div>
-                                    </dl>
+                                    <div @class([
+                                        'grid',
+                                        'sm:grid-cols-[minmax(0,1fr)_8.5rem]' => $showsParticipantControl,
+                                    ]) data-option-controls>
+                                        <dl class="grid grid-cols-3 divide-x divide-stone-300 border border-stone-300 bg-white/55 text-center dark:divide-stone-700 dark:border-stone-700 dark:bg-stone-950/30" aria-label="{{ __('Capacity for :option', ['option' => $option->name]) }}">
+                                            <div class="px-2 py-3">
+                                                <dt class="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-stone-500 dark:text-stone-400">{{ __('Total') }}</dt>
+                                                <dd class="mt-1 font-mono text-xl font-bold tabular-nums">{{ $option->capacity }}</dd>
+                                            </div>
+                                            <div class="px-2 py-3">
+                                                <dt class="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-stone-500 dark:text-stone-400">{{ __('Claimed') }}</dt>
+                                                <dd class="mt-1 font-mono text-xl font-bold tabular-nums">{{ $option->claimed_count }}</dd>
+                                            </div>
+                                            <div class="px-2 py-3">
+                                                <dt class="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-stone-500 dark:text-stone-400">{{ __('Remaining') }}</dt>
+                                                <dd class="mt-1 font-mono text-xl font-bold tabular-nums">{{ $remaining }}</dd>
+                                            </div>
+                                        </dl>
+
+                                        @if ($isClaimedByParticipant)
+                                            <p class="flex min-h-11 items-center justify-center gap-2 border border-teal-900 bg-teal-50 px-3 py-3 font-mono text-xs font-bold uppercase tracking-[0.12em] text-teal-900 sm:h-full sm:border-s-0 dark:border-teal-300 dark:bg-teal-950/50 dark:text-teal-200">
+                                                <span aria-hidden="true">✓</span>
+                                                {{ __('Yours') }}
+                                            </p>
+                                        @elseif ($isAvailable && $participantReachedSelectionMaximum)
+                                            <p class="flex min-h-11 items-center justify-center border border-stone-400 bg-stone-100 px-3 py-3 text-center font-mono text-[0.65rem] font-bold uppercase tracking-[0.1em] text-stone-600 sm:h-full sm:border-s-0 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-300">
+                                                {{ __('Maximum reached') }}
+                                            </p>
+                                        @elseif ($isAvailable && $sheet->participation_policy === \App\Models\Sheet::PARTICIPATION_OPEN)
+                                            <x-ui.button
+                                                variant="ledger"
+                                                class="group w-full justify-between py-3 sm:h-full sm:justify-center sm:border-s-0 sm:px-3"
+                                                x-on:click="$dispatch('claim-option', { optionPublicId: '{{ $option->public_id }}' })"
+                                                :aria-label="__('Claim :option', ['option' => $option->name])"
+                                            >
+                                                <span class="font-mono text-xs font-bold uppercase tracking-[0.16em]">{{ __('Claim') }}</span>
+                                                <span class="flex size-7 items-center justify-center border border-current text-lg leading-none transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden="true">→</span>
+                                            </x-ui.button>
+                                        @endif
+                                    </div>
                                 </article>
 
                                 @php

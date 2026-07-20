@@ -91,6 +91,40 @@ class CompleteOpenSignup
         );
     }
 
+    public function claim(
+        ?Account $account,
+        CompleteSignupInput $input,
+        ?string $participationKeyHash,
+    ): CompleteSignupResult {
+        if (DB::connection()->getDriverName() !== 'sqlite') {
+            throw new CannotCompleteSignup('Signups are temporarily unavailable. Please try again.');
+        }
+
+        try {
+            $this->immediateTransaction->run(
+                fn (): Signup => $this->appendClaim(
+                    accountId: $account?->id,
+                    input: $input,
+                    participationKeyHash: $participationKeyHash,
+                ),
+            );
+        } catch (CannotChangeSignupClaims $exception) {
+            throw new CannotCompleteSignup(
+                $exception->getMessage(),
+                $exception->unavailableOptionNames,
+                $exception->unavailableOptionPublicIds,
+                $exception,
+            );
+        } catch (ImmediateTransactionBusy $exception) {
+            throw new CannotCompleteSignup(
+                'The Signup Sheet is busy. Please wait a moment and try again.',
+                previous: $exception,
+            );
+        }
+
+        return new CompleteSignupResult(checkEmail: false);
+    }
+
     private function queueDuplicateAccessAfterCapacityFailure(
         CannotCompleteSignup $exception,
         string $sheetPublicId,
@@ -241,5 +275,76 @@ class CompleteOpenSignup
         }
 
         return ['signup' => $target->signup, 'duplicate' => $target->alreadyComplete];
+    }
+
+    private function appendClaim(
+        ?int $accountId,
+        CompleteSignupInput $input,
+        ?string $participationKeyHash,
+    ): Signup {
+        $sheet = Sheet::query()
+            ->where('public_id', $input->sheetPublicId)
+            ->first();
+
+        if ($sheet === null || ! $sheet->isAcceptingOpenParticipationSignups()) {
+            throw new CannotCompleteSignup('This Signup Sheet is no longer open for signups.');
+        }
+
+        $account = $accountId === null
+            ? null
+            : Account::query()->whereKey($accountId)->first();
+
+        if ($accountId !== null && $account === null) {
+            throw new CannotCompleteSignup('This Account is no longer available.');
+        }
+
+        if ($account === null && ! preg_match('/^[a-f0-9]{64}$/', $participationKeyHash ?? '')) {
+            throw new CannotCompleteSignup('This browser could not be identified. Refresh and try again.');
+        }
+
+        $signup = Signup::query()
+            ->where('sheet_id', $sheet->id)
+            ->when(
+                $account !== null,
+                fn ($query) => $query->where('account_id', $account->id),
+                fn ($query) => $query->where('participation_key_hash', $participationKeyHash),
+            )
+            ->first();
+
+        if ($signup === null) {
+            $signup = new Signup([
+                'name_snapshot' => trim($input->name),
+                'email_snapshot' => null,
+                'phone_snapshot' => $input->phone,
+                'name_consent' => $sheet->name_visibility === Sheet::VISIBILITY_PARTICIPANTS
+                    && $input->nameConsent,
+                'email_consent' => false,
+                'phone_consent' => $sheet->phone_visibility === Sheet::VISIBILITY_PARTICIPANTS
+                    && $input->phoneConsent,
+            ]);
+            $signup->sheet()->associate($sheet);
+
+            if ($account !== null) {
+                $signup->account()->associate($account);
+            } else {
+                $signup->forceFill(['participation_key_hash' => $participationKeyHash]);
+            }
+
+            $signup->save();
+        }
+
+        $optionPublicIds = $signup->optionClaims()
+            ->with('option')
+            ->get()
+            ->map(fn (OptionClaim $claim): string => $claim->option->public_id)
+            ->all();
+        $optionPublicIds = array_values(array_unique([
+            ...$optionPublicIds,
+            ...$input->optionPublicIds,
+        ]));
+
+        $this->replaceSignupClaims->handle($sheet, $signup, $optionPublicIds);
+
+        return $signup;
     }
 }

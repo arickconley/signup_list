@@ -4,10 +4,12 @@ namespace App\Actions;
 
 use App\Data\CompleteSignupInput;
 use App\Data\CompleteSignupResult;
+use App\Exceptions\CannotChangeSignupClaims;
 use App\Exceptions\CannotCompleteSignup;
 use App\Exceptions\ImmediateTransactionBusy;
 use App\Models\Account;
 use App\Models\Option;
+use App\Models\OptionClaim;
 use App\Models\Sheet;
 use App\Models\Signup;
 use App\Support\ImmediateDatabaseTransaction;
@@ -18,17 +20,42 @@ final class CompleteVerifiedSignup
     public function __construct(
         private readonly ImmediateDatabaseTransaction $immediateTransaction,
         private readonly AttachPendingAccountAssociations $attachPendingAccountAssociations,
+        private readonly ReplaceSignupClaims $replaceSignupClaims,
     ) {}
 
     public function handle(Account $account, CompleteSignupInput $input): CompleteSignupResult
     {
+        return $this->run($account, $input, appendToExistingSignup: false);
+    }
+
+    public function claim(Account $account, CompleteSignupInput $input): CompleteSignupResult
+    {
+        return $this->run($account, $input, appendToExistingSignup: true);
+    }
+
+    private function run(
+        Account $account,
+        CompleteSignupInput $input,
+        bool $appendToExistingSignup,
+    ): CompleteSignupResult {
         if (DB::connection()->getDriverName() !== 'sqlite') {
             throw new CannotCompleteSignup('Signups are temporarily unavailable. Please try again.');
         }
 
         try {
             $this->immediateTransaction->run(
-                fn (): Signup => $this->createSignup($account->id, $input),
+                fn (): Signup => $this->createSignup(
+                    $account->id,
+                    $input,
+                    $appendToExistingSignup,
+                ),
+            );
+        } catch (CannotChangeSignupClaims $exception) {
+            throw new CannotCompleteSignup(
+                $exception->getMessage(),
+                $exception->unavailableOptionNames,
+                $exception->unavailableOptionPublicIds,
+                $exception,
             );
         } catch (ImmediateTransactionBusy $exception) {
             throw new CannotCompleteSignup(
@@ -40,8 +67,11 @@ final class CompleteVerifiedSignup
         return new CompleteSignupResult(checkEmail: false);
     }
 
-    private function createSignup(int $accountId, CompleteSignupInput $input): Signup
-    {
+    private function createSignup(
+        int $accountId,
+        CompleteSignupInput $input,
+        bool $appendToExistingSignup,
+    ): Signup {
         $account = Account::query()->whereKey($accountId)->first();
 
         if ($account === null || ! $account->hasVerifiedEmail()) {
@@ -72,6 +102,21 @@ final class CompleteVerifiedSignup
         $existingSignup = $this->attachPendingAccountAssociations->handleForSheet($account, $sheet);
 
         if ($existingSignup !== null) {
+            if (! $appendToExistingSignup) {
+                return $existingSignup;
+            }
+
+            $optionPublicIds = $existingSignup->optionClaims()
+                ->with('option')
+                ->get()
+                ->map(fn (OptionClaim $claim): string => $claim->option->public_id)
+                ->merge($input->optionPublicIds)
+                ->unique()
+                ->values()
+                ->all();
+
+            $this->replaceSignupClaims->handle($sheet, $existingSignup, $optionPublicIds);
+
             return $existingSignup;
         }
 

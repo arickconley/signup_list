@@ -10,6 +10,7 @@ use App\Exceptions\ImmediateTransactionBusy;
 use App\Models\Account;
 use App\Models\OptionClaim;
 use App\Models\Sheet;
+use App\Models\Signup;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -95,6 +96,13 @@ class CompleteVerifiedSignup extends Component
 
     public function complete(CompleteSignup $completeSignup): void
     {
+        $this->submit($completeSignup, appendToExistingSignup: false);
+    }
+
+    private function submit(
+        CompleteSignup $completeSignup,
+        bool $appendToExistingSignup,
+    ): void {
         $account = Auth::user();
 
         abort_unless($account instanceof Account, 403);
@@ -144,7 +152,7 @@ class CompleteVerifiedSignup extends Component
         RateLimiter::hit($rateLimitKey, 60);
 
         try {
-            $completeSignup->handle($account, new CompleteSignupInput(
+            $input = new CompleteSignupInput(
                 sheetPublicId: $this->sheetPublicId,
                 name: $this->name,
                 phone: $this->phone === '' ? null : $this->phone,
@@ -154,7 +162,13 @@ class CompleteVerifiedSignup extends Component
                 nameConsent: $this->nameConsent,
                 emailConsent: $this->emailConsent,
                 phoneConsent: $this->phoneConsent,
-            ));
+            );
+
+            if ($appendToExistingSignup) {
+                $completeSignup->claim($account, $input);
+            } else {
+                $completeSignup->handle($account, $input);
+            }
         } catch (CannotCompleteSignup $exception) {
             $this->unavailableOptionNames = $exception->unavailableOptionNames;
             $this->selectedOptions = array_values(array_diff(
@@ -171,15 +185,52 @@ class CompleteVerifiedSignup extends Component
         $this->announcement = __('Signup complete.');
     }
 
+    public function claim(string $optionPublicId, CompleteSignup $completeSignup): void
+    {
+        $account = Auth::user();
+
+        abort_unless($account instanceof Account, 403);
+
+        $this->name = $account->accountDefaults()->name;
+        $this->selectedOptions = [$optionPublicId];
+
+        $this->submit($completeSignup, appendToExistingSignup: true);
+
+        if ($this->completed) {
+            $this->completed = false;
+            $this->existingSignup = true;
+            $this->syncExistingOptionNames($account);
+            $this->announcement = __('Option claimed.');
+        }
+    }
+
     public function render(): View
     {
         $sheet = Sheet::query()
             ->where('public_id', $this->sheetPublicId)
             ->firstOrFail();
 
+        $availableOptions = $sheet->options()
+            ->whereColumn('claimed_count', '<', 'capacity');
+        $account = Auth::user();
+
+        if ($account instanceof Account) {
+            $claimedOptionIds = Signup::query()
+                ->where('sheet_id', $sheet->id)
+                ->where('account_id', $account->id)
+                ->first()
+                ?->optionClaims()
+                ->pluck('option_id') ?? collect();
+
+            if ($claimedOptionIds->count() >= $sheet->selection_maximum) {
+                $availableOptions->whereRaw('1 = 0');
+            } elseif ($claimedOptionIds->isNotEmpty()) {
+                $availableOptions->whereNotIn('id', $claimedOptionIds);
+            }
+        }
+
         return view('livewire.complete-verified-signup', [
-            'availableOptions' => $sheet->options()
-                ->whereColumn('claimed_count', '<', 'capacity')
+            'availableOptions' => $availableOptions
                 ->orderBy('position')
                 ->get(['public_id', 'name']),
             'selectionMaximum' => $sheet->selection_maximum,
@@ -187,5 +238,21 @@ class CompleteVerifiedSignup extends Component
             'showsEmailConsent' => $sheet->email_visibility === Sheet::VISIBILITY_PARTICIPANTS,
             'showsPhoneConsent' => $sheet->phone_visibility === Sheet::VISIBILITY_PARTICIPANTS,
         ]);
+    }
+
+    private function syncExistingOptionNames(Account $account): void
+    {
+        $signup = Signup::query()
+            ->where('account_id', $account->id)
+            ->whereHas('sheet', fn ($query) => $query->where('public_id', $this->sheetPublicId))
+            ->with('optionClaims.option')
+            ->first();
+
+        $this->existingOptionNames = $signup === null
+            ? []
+            : array_values($signup->optionClaims
+                ->sortBy(fn (OptionClaim $claim): int => $claim->option->position)
+                ->map(fn (OptionClaim $claim): string => $claim->option->name)
+                ->all());
     }
 }

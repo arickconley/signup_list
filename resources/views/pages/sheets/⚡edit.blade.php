@@ -9,11 +9,12 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Validator;
+use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
-new #[Title('Edit Signup Sheet')] class extends Component
+new #[Layout('layouts.app', ['robots' => 'noindex, nofollow'])] #[Title('Edit Signup Sheet')] class extends Component
 {
     public Sheet $sheet;
 
@@ -527,8 +528,7 @@ new #[Title('Edit Signup Sheet')] class extends Component
 
 ?>
 
-<x-layouts::app :title="$sheet->title" robots="noindex, nofollow">
-    <div class="mx-auto max-w-3xl">
+<div class="mx-auto max-w-3xl">
         <p class="text-xs font-bold uppercase tracking-[0.18em] text-teal-700 dark:text-teal-400">
             {{ match ($sheet->state) {
                 Sheet::STATE_PUBLISHED => __('Published Sheet'),
@@ -830,5 +830,4 @@ new #[Title('Edit Signup Sheet')] class extends Component
             <p class="mt-2 text-sm text-stone-600 dark:text-stone-400">{{ __('Start a new Draft Sheet using this Signup Sheet’s content and settings.') }}</p>
             <x-ui.button wire:click="duplicate" variant="outline" class="mt-4">{{ __('Duplicate Sheet') }}</x-ui.button>
         </section>
-    </div>
-</x-layouts::app>
+</div>

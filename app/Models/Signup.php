@@ -14,6 +14,7 @@ use Illuminate\Support\Str;
  * @property int $id
  * @property int $sheet_id
  * @property int|null $account_id
+ * @property string|null $participation_key_hash
  * @property string $name_snapshot
  * @property string|null $email_snapshot
  * @property string|null $phone_snapshot

@@ -177,6 +177,43 @@ test('Published Sheet lists Options in Owner order with capacity totals', functi
         ]);
 });
 
+test('Open Participation puts Claim on the Option ledger row without duplicating the Option list', function () {
+    $sheet = Sheet::factory()->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_OPEN,
+        'selection_maximum' => 1,
+    ]);
+    $sheet->options()->create([
+        'name' => 'Welcome table',
+        'capacity' => 2,
+        'position' => 1,
+    ]);
+
+    $response = $this->get(route('sheets.show', $sheet))->assertOk();
+
+    $document = new DOMDocument;
+    $document->loadHTML($response->getContent());
+    $xpath = new DOMXPath($document);
+    $claimButton = $xpath->query("//article[.//h3[normalize-space(.)='Welcome table']]//*[@data-option-controls]//button[.//span[normalize-space(.)='Claim']]")->item(0);
+    $node = $claimButton;
+    $hasAlpineScope = false;
+
+    while ($node instanceof DOMElement) {
+        if ($node->hasAttribute('x-data')) {
+            $hasAlpineScope = true;
+
+            break;
+        }
+
+        $node = $node->parentNode;
+    }
+
+    expect($xpath->query("//h3[normalize-space(.)='Welcome table']"))->toHaveCount(1)
+        ->and($xpath->query("//article[.//h3[normalize-space(.)='Welcome table']]//*[@data-option-controls]//button[.//span[normalize-space(.)='Claim']]"))->toHaveCount(1)
+        ->and($hasAlpineScope)->toBeTrue()
+        ->and($xpath->query("//*[normalize-space(.)='Available Options']"))->toHaveCount(0);
+});
+
 test('Full and Over-Capacity Options remain visible with textual unavailable states', function () {
     $sheet = Sheet::factory()->create([
         'state' => Sheet::STATE_PUBLISHED,
@@ -481,7 +518,7 @@ test('public name rendering applies eligibility and consent for every Participan
     'Unregistered eligible consented' => ['unregistered', Sheet::VISIBILITY_PARTICIPANTS, true, 'Nova Meridian'],
 ]);
 
-test('future Open Signup offers consent only for independently participant-visible fields', function () {
+test('future Open Participation keeps identity fields out of the ledger until Claim', function () {
     $sheet = Sheet::factory()->create([
         'state' => Sheet::STATE_PUBLISHED,
         'selection_maximum' => 1,
@@ -497,10 +534,12 @@ test('future Open Signup offers consent only for independently participant-visib
 
     $this->get(route('sheets.show', $sheet))
         ->assertOk()
-        ->assertSee('Visibility Consent')
-        ->assertSee('Share full name')
+        ->assertSee('Claim Future Signup Option')
+        ->assertDontSee('Visibility Consent')
+        ->assertDontSee('Share full name')
         ->assertDontSee('Share email')
-        ->assertSee('Share phone');
+        ->assertDontSee('Share phone')
+        ->assertDontSee('Your name');
 });
 
 test('tightening visibility removes previously consented snapshots immediately', function () {

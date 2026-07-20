@@ -12,11 +12,12 @@ use App\Models\Signup;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
-new #[Title('Edit Signup')] class extends Component
+new #[Layout('layouts.app', ['robots' => 'noindex, nofollow'])] #[Title('Edit Signup')] class extends Component
 {
     public Signup $signup;
 
@@ -177,8 +178,7 @@ new #[Title('Edit Signup')] class extends Component
 
 ?>
 
-<x-layouts::app :title="__('Edit Signup')" robots="noindex, nofollow">
-    <div class="mx-auto max-w-3xl">
+<div class="mx-auto max-w-3xl">
         <header class="border-b border-stone-200 pb-6 dark:border-stone-800">
             <p class="text-xs font-bold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-400">{{ __('Your Signup') }}</p>
             <h1 class="mt-2 font-display text-4xl font-semibold tracking-tight">{{ __('Edit Signup') }}</h1>
@@ -338,5 +338,4 @@ new #[Title('Edit Signup')] class extends Component
         <div class="mt-6">
             <x-ui.link :href="route('dashboard')" wire:navigate action>{{ __('Back to Dashboard') }}</x-ui.link>
         </div>
-    </div>
-</x-layouts::app>
+</div>

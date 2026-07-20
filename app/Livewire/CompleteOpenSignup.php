@@ -6,8 +6,11 @@ use App\Actions\CompleteOpenSignup as CompleteSignup;
 use App\Data\CompleteSignupInput;
 use App\Exceptions\CannotCompleteSignup;
 use App\Models\Account;
+use App\Models\Option;
 use App\Models\Sheet;
+use App\Support\OpenParticipationIdentity;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Attributes\Locked;
@@ -37,12 +40,25 @@ class CompleteOpenSignup extends Component
 
     public string $announcement = '';
 
+    #[Locked]
+    public bool $usesAccountName = false;
+
     public bool $completed = false;
+
+    public bool $claimed = false;
 
     public bool $checkEmail = false;
 
     /** @var array<int, string> */
     public array $unavailableOptionNames = [];
+
+    #[Locked]
+    public ?string $pendingOptionPublicId = null;
+
+    #[Locked]
+    public string $pendingOptionName = '';
+
+    public bool $showNameModal = false;
 
     public function mount(string $sheetPublicId): void
     {
@@ -53,16 +69,32 @@ class CompleteOpenSignup extends Component
         abort_unless($sheet->isAcceptingOpenParticipationSignups(), 404);
 
         $this->sheetPublicId = $sheetPublicId;
+
+        $account = Auth::user();
+
+        if ($account instanceof Account && filled($account->name)) {
+            $this->usesAccountName = true;
+        }
     }
 
     public function complete(CompleteSignup $completeSignup): void
     {
+        $this->submit($completeSignup);
+    }
+
+    private function submit(
+        CompleteSignup $completeSignup,
+        bool $immediateClaim = false,
+        ?Account $account = null,
+        ?string $participationKeyHash = null,
+    ): void {
         $this->name = trim($this->name);
         $this->phone = trim($this->phone);
         $this->email = filled($this->email) ? Account::normalizeEmail($this->email) : '';
         $this->resetErrorBag();
         $this->unavailableOptionNames = [];
         $this->announcement = '';
+        $this->claimed = false;
 
         if (trim($this->website) !== '') {
             $this->reset(
@@ -118,7 +150,7 @@ class CompleteOpenSignup extends Component
         RateLimiter::hit($rateLimitKey, 60);
 
         try {
-            $result = $completeSignup->handle(new CompleteSignupInput(
+            $input = new CompleteSignupInput(
                 sheetPublicId: $this->sheetPublicId,
                 name: $this->name,
                 phone: $this->phone === '' ? null : $this->phone,
@@ -128,7 +160,11 @@ class CompleteOpenSignup extends Component
                 nameConsent: $this->nameConsent,
                 emailConsent: $this->emailConsent,
                 phoneConsent: $this->phoneConsent,
-            ));
+            );
+
+            $result = $immediateClaim
+                ? $completeSignup->claim($account, $input, $participationKeyHash)
+                : $completeSignup->handle($input);
         } catch (CannotCompleteSignup $exception) {
             $this->unavailableOptionNames = $exception->unavailableOptionNames;
             $this->selectedOptions = array_values(array_diff(
@@ -153,29 +189,122 @@ class CompleteOpenSignup extends Component
             : __('Signup complete.');
     }
 
+    public function claim(
+        string $optionPublicId,
+        CompleteSignup $completeSignup,
+        OpenParticipationIdentity $participationIdentity,
+    ): void {
+        $authenticatedAccount = Auth::user();
+        $account = $authenticatedAccount instanceof Account
+            ? $authenticatedAccount
+            : null;
+
+        $usesAccountName = $account !== null && $this->usesAccountName;
+
+        if ($usesAccountName) {
+            $this->name = $account->accountDefaults()->name;
+        }
+
+        $this->selectedOptions = [$optionPublicId];
+
+        try {
+            $this->submit(
+                $completeSignup,
+                immediateClaim: true,
+                account: $account,
+                participationKeyHash: $account === null
+                    ? $participationIdentity->hashForSheet($this->sheetPublicId)
+                    : null,
+            );
+        } finally {
+            if ($usesAccountName) {
+                $this->name = '';
+            }
+        }
+
+        if ($this->completed && ! $this->checkEmail) {
+            $this->completed = false;
+            $this->claimed = true;
+            $this->announcement = __('Option claimed.');
+        }
+    }
+
+    public function beginClaim(
+        string $optionPublicId,
+        CompleteSignup $completeSignup,
+        OpenParticipationIdentity $participationIdentity,
+    ): void {
+        $option = $this->findAvailableOption($optionPublicId);
+
+        $this->resetErrorBag();
+        $this->announcement = '';
+        $this->pendingOptionPublicId = $option->public_id;
+        $this->pendingOptionName = $option->name;
+
+        if ($this->usesAccountName) {
+            $this->claim($option->public_id, $completeSignup, $participationIdentity);
+
+            if ($this->claimed) {
+                $this->redirectAfterClaim();
+            }
+
+            return;
+        }
+
+        $this->showNameModal = true;
+    }
+
+    public function claimPending(
+        CompleteSignup $completeSignup,
+        OpenParticipationIdentity $participationIdentity,
+    ): void {
+        abort_unless($this->showNameModal && $this->pendingOptionPublicId !== null, 404);
+
+        $this->claim($this->pendingOptionPublicId, $completeSignup, $participationIdentity);
+
+        if ($this->claimed) {
+            $this->redirectAfterClaim();
+        }
+    }
+
+    public function cancelClaim(): void
+    {
+        $this->resetErrorBag();
+        $this->reset('pendingOptionPublicId', 'pendingOptionName', 'showNameModal');
+        $this->announcement = '';
+    }
+
     public function render(): View
+    {
+        Sheet::query()
+            ->where('public_id', $this->sheetPublicId)
+            ->firstOrFail();
+
+        return view('livewire.complete-open-signup');
+    }
+
+    private function findAvailableOption(string $optionPublicId): Option
     {
         $sheet = Sheet::query()
             ->where('public_id', $this->sheetPublicId)
             ->firstOrFail();
 
-        $acceptingSignups = $sheet->isAcceptingOpenParticipationSignups();
+        abort_unless($sheet->isAcceptingOpenParticipationSignups(), 404);
 
-        $availableOptions = $acceptingSignups
-            ? $sheet->options()
-                ->whereColumn('claimed_count', '<', 'capacity')
-                ->orderBy('position')
-                ->get(['public_id', 'name'])
-            : collect();
+        return $sheet->options()
+            ->where('public_id', $optionPublicId)
+            ->whereColumn('claimed_count', '<', 'capacity')
+            ->firstOrFail(['public_id', 'name']);
+    }
 
-        return view('livewire.complete-open-signup', [
-            'availableOptions' => $availableOptions,
-            'selectionMaximum' => $sheet->selection_maximum,
-            'acceptingSignups' => $acceptingSignups,
-            'hasAvailableOptions' => $availableOptions->isNotEmpty(),
-            'showsNameConsent' => $sheet->name_visibility === Sheet::VISIBILITY_PARTICIPANTS,
-            'showsEmailConsent' => $sheet->email_visibility === Sheet::VISIBILITY_PARTICIPANTS,
-            'showsPhoneConsent' => $sheet->phone_visibility === Sheet::VISIBILITY_PARTICIPANTS,
-        ]);
+    private function redirectAfterClaim(): void
+    {
+        session()->flash('option-claimed', __(':option claimed.', [
+            'option' => $this->pendingOptionName,
+        ]));
+
+        $this->redirectRoute('sheets.show', [
+            'sheet' => $this->sheetPublicId,
+        ], navigate: true);
     }
 }

@@ -108,13 +108,233 @@ test('Open Published Sheet offers an Unregistered Participant signup', function 
 
     $this->get(route('sheets.show', $sheet))
         ->assertOk()
-        ->assertSeeHtml('wire:submit="complete"')
-        ->assertSee('Your name')
-        ->assertSee('Phone')
+        ->assertSeeHtml("optionPublicId: '".$available->public_id."'")
+        ->assertSeeHtml('x-on:claim-option.window="$wire.beginClaim($event.detail.optionPublicId)"')
+        ->assertSee('Claim')
         ->assertSee('Morning setup')
-        ->assertSee('Choose up to 2 Options for this Signup')
-        ->assertSee('submitting again can bypass this limit')
+        ->assertDontSee('Your name')
+        ->assertDontSee('Available Options')
         ->assertDontSee('731003');
+});
+
+test('Unregistered Participant claims one Option immediately from its Claim button', function () {
+    $sheet = Sheet::factory()->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_OPEN,
+        'selection_maximum' => 2,
+    ]);
+    $option = $sheet->options()->create([
+        'name' => 'Morning welcome table',
+        'capacity' => 2,
+        'position' => 1,
+    ]);
+
+    Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
+        ->call('beginClaim', $option->public_id)
+        ->assertSee('Claim Morning welcome table')
+        ->set('name', 'Jordan Lee')
+        ->call('claimPending')
+        ->assertHasNoErrors()
+        ->assertRedirect(route('sheets.show', $sheet));
+
+    $signup = Signup::query()->with('optionClaims')->sole();
+
+    expect($signup->name_snapshot)->toBe('Jordan Lee')
+        ->and($signup->optionClaims)->toHaveCount(1)
+        ->and($signup->optionClaims->sole()->option_id)->toBe($option->id)
+        ->and($option->refresh()->claimed_count)->toBe(1);
+});
+
+test('Unregistered Participant Claim opens a name-only modal for the selected Option', function () {
+    $sheet = Sheet::factory()->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_OPEN,
+        'selection_maximum' => 1,
+    ]);
+    $option = $sheet->options()->create([
+        'name' => 'Cooler with drinks',
+        'capacity' => 1,
+        'position' => 1,
+    ]);
+
+    Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
+        ->call('beginClaim', $option->public_id)
+        ->assertSet('showNameModal', true)
+        ->assertSet('pendingOptionName', 'Cooler with drinks')
+        ->assertSee('Claim Cooler with drinks')
+        ->assertSee('Your name')
+        ->assertSee('Cancel')
+        ->assertSeeHtml('data-remember-participant-name')
+        ->assertDontSee('Email')
+        ->assertDontSee('Phone')
+        ->assertDontSee('Visibility Consent')
+        ->assertDontSee('Available Options');
+});
+
+test('signed-in Participant claims with their Account name', function () {
+    $account = Account::factory()->create(['name' => 'Account Name']);
+    $sheet = Sheet::factory()->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_OPEN,
+        'selection_maximum' => 1,
+    ]);
+    $option = $sheet->options()->create([
+        'name' => 'Afternoon welcome table',
+        'capacity' => 1,
+        'position' => 1,
+    ]);
+
+    Livewire::actingAs($account)
+        ->test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
+        ->assertSet('name', '')
+        ->assertSet('usesAccountName', true)
+        ->call('beginClaim', $option->public_id)
+        ->assertHasNoErrors()
+        ->assertSet('showNameModal', false)
+        ->assertRedirect(route('sheets.show', $sheet));
+
+    expect(Signup::query()->sole()->name_snapshot)->toBe('Account Name')
+        ->and($option->refresh()->claimed_count)->toBe(1);
+});
+
+test('Unregistered Participant name is restored and remembered only in the browser', function () {
+    $sheet = Sheet::factory()->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_OPEN,
+        'selection_maximum' => 1,
+    ]);
+    $sheet->options()->create([
+        'name' => 'Remembered-name Option',
+        'capacity' => 1,
+        'position' => 1,
+    ]);
+
+    Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
+        ->call('beginClaim', $sheet->options()->sole()->public_id)
+        ->assertSeeHtml('data-remember-participant-name')
+        ->assertSeeHtml('localStorage.getItem(\'signup.participant-name\')')
+        ->assertSeeHtml('localStorage.setItem(\'signup.participant-name\'');
+
+    $account = Account::factory()->create(['name' => 'Signed-in Name']);
+
+    Livewire::actingAs($account)
+        ->test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
+        ->assertDontSeeHtml('data-remember-participant-name');
+});
+
+test('Unregistered Participant immediately claims another Option without re-entering their name', function () {
+    $sheet = Sheet::factory()->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_OPEN,
+        'selection_maximum' => 2,
+    ]);
+    $firstOption = $sheet->options()->create([
+        'name' => 'First unregistered Option',
+        'capacity' => 1,
+        'position' => 1,
+    ]);
+    $secondOption = $sheet->options()->create([
+        'name' => 'Second unregistered Option',
+        'capacity' => 1,
+        'position' => 2,
+    ]);
+
+    $component = Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
+        ->set('name', 'Remembered Participant')
+        ->call('claim', $firstOption->public_id)
+        ->assertHasNoErrors()
+        ->assertSet('name', 'Remembered Participant');
+
+    $component
+        ->call('claim', $secondOption->public_id)
+        ->assertHasNoErrors()
+        ->assertSet('name', 'Remembered Participant');
+
+    $signup = Signup::query()->with('optionClaims')->sole();
+
+    expect($signup->name_snapshot)->toBe('Remembered Participant')
+        ->and($signup->optionClaims)->toHaveCount(2)
+        ->and(OptionClaim::query()->pluck('option_id')->sort()->values()->all())
+        ->toBe([$firstOption->id, $secondOption->id]);
+});
+
+test('immediate Open claims share one browser Signup and enforce its selection maximum', function () {
+    $sheet = Sheet::factory()->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_OPEN,
+        'selection_maximum' => 1,
+    ]);
+    $firstOption = $sheet->options()->create([
+        'name' => 'First limited Option',
+        'capacity' => 2,
+        'position' => 1,
+    ]);
+    $secondOption = $sheet->options()->create([
+        'name' => 'Second limited Option',
+        'capacity' => 2,
+        'position' => 2,
+    ]);
+
+    Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
+        ->call('beginClaim', $firstOption->public_id)
+        ->set('name', 'One Browser Participant')
+        ->call('claimPending')
+        ->assertHasNoErrors();
+
+    $this->get(route('sheets.show', $sheet))
+        ->assertOk()
+        ->assertSee('Yours')
+        ->assertSee('Maximum reached')
+        ->assertDontSeeHtml('aria-label="Claim Second limited Option"');
+
+    Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
+        ->call('beginClaim', $secondOption->public_id)
+        ->set('name', 'One Browser Participant')
+        ->call('claimPending')
+        ->assertHasErrors(['signup'])
+        ->assertSee('Choose between 1 and 1 available Options.');
+
+    expect(Signup::query()->count())->toBe(1)
+        ->and(OptionClaim::query()->count())->toBe(1)
+        ->and($firstOption->refresh()->claimed_count)->toBe(1)
+        ->and($secondOption->refresh()->claimed_count)->toBe(0);
+});
+
+test('signed-in immediate Open claims share their Account Signup and enforce its selection maximum', function () {
+    $account = Account::factory()->create(['name' => 'Limited Account']);
+    $sheet = Sheet::factory()->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_OPEN,
+        'selection_maximum' => 1,
+    ]);
+    $firstOption = $sheet->options()->create([
+        'name' => 'First Account Option',
+        'capacity' => 2,
+        'position' => 1,
+    ]);
+    $secondOption = $sheet->options()->create([
+        'name' => 'Second Account Option',
+        'capacity' => 2,
+        'position' => 2,
+    ]);
+
+    Livewire::actingAs($account)
+        ->test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
+        ->call('beginClaim', $firstOption->public_id)
+        ->assertHasNoErrors();
+
+    Livewire::actingAs($account)
+        ->test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
+        ->call('beginClaim', $secondOption->public_id)
+        ->assertHasErrors(['signup'])
+        ->assertSee('Choose between 1 and 1 available Options.');
+
+    $signup = Signup::query()->with('optionClaims')->sole();
+
+    expect($signup->account_id)->toBe($account->id)
+        ->and($signup->optionClaims)->toHaveCount(1)
+        ->and($firstOption->refresh()->claimed_count)->toBe(1)
+        ->and($secondOption->refresh()->claimed_count)->toBe(0);
 });
 
 test('Published Sheet with no available Options does not offer a Signup action', function () {
@@ -132,7 +352,8 @@ test('Published Sheet with no available Options does not offer a Signup action',
 
     $this->get(route('sheets.show', $sheet))
         ->assertOk()
-        ->assertSee('All Options are currently unavailable.')
+        ->assertSee('Full — unavailable')
+        ->assertDontSee('Claim Already full')
         ->assertDontSeeHtml('wire:submit="complete"');
 });
 
@@ -345,8 +566,7 @@ test('Signup validates required identity and selection maximum on the server', f
         ->set('name', 'Morgan Reed')
         ->set('selectedOptions', [$firstOption->public_id, $secondOption->public_id])
         ->call('complete')
-        ->assertHasErrors(['selectedOptions'])
-        ->assertSee('Choose between 1 and 1 available Options.');
+        ->assertHasErrors(['selectedOptions']);
 
     expect(Signup::query()->count())->toBe(0)
         ->and($firstOption->refresh()->claimed_count)->toBe(0)

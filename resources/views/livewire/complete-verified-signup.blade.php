@@ -1,6 +1,7 @@
 <section class="mt-8 border-t-2 border-stone-800 pt-8 dark:border-stone-200" aria-labelledby="verified-signup-title">
     <p class="font-mono text-xs font-bold uppercase tracking-[0.16em] text-teal-800 dark:text-teal-300">{{ __('Verified Account') }}</p>
-    <h2 id="verified-signup-title" class="mt-2 font-display text-3xl font-semibold tracking-tight">{{ __('Choose your Options') }}</h2>
+    <h2 id="verified-signup-title" class="mt-2 font-display text-3xl font-semibold tracking-tight">{{ __('Claim an Option') }}</h2>
+    <p class="mt-3 text-sm leading-6 text-stone-600 dark:text-stone-400">{{ __('Claim an available Option with your Account name.') }}</p>
 
     <p class="sr-only" role="status" aria-live="polite">{{ $announcement }}</p>
 
@@ -17,8 +18,10 @@
         <x-ui.callout class="mt-7" :heading="__('Signup complete')">
             <p class="mt-1">{{ __('Your Option claims are confirmed for this Account.') }}</p>
         </x-ui.callout>
-    @else
-    <form wire:submit="complete" class="mt-7 grid gap-6" novalidate>
+    @endif
+
+    @if (! $completed && $availableOptions->isNotEmpty())
+    <form class="mt-7 grid gap-6" x-on:submit.prevent novalidate>
         @if ($errors->any())
             <x-ui.callout variant="danger" :heading="__('Please correct the highlighted fields.')">
                 <ul class="mt-2 list-inside list-disc space-y-1">
@@ -32,7 +35,7 @@
             </x-ui.callout>
         @endif
         <div class="grid gap-6 sm:grid-cols-2">
-            <x-ui.input wire:model="name" name="name" :label="__('Your name')" type="text" autocomplete="name" required />
+            <x-ui.input wire:model="name" name="name" :label="__('Your name')" type="text" autocomplete="name" readonly required />
             <x-ui.input wire:model="email" name="email" :label="__('Account email')" type="email" autocomplete="email" readonly required />
             <x-ui.input wire:model="phone" name="phone" :label="__('Phone')" type="tel" autocomplete="tel" :description="__('Optional.')" />
         </div>
@@ -56,17 +59,21 @@
         @endif
 
         <fieldset class="grid gap-3" @if ($errors->has('selectedOptions') || $errors->has('signup')) aria-invalid="true" aria-describedby="verified-signup-options-error" @endif>
-            <legend class="text-sm font-semibold text-stone-800 dark:text-stone-100">{{ trans_choice('Choose up to :count Option|Choose up to :count Options', $selectionMaximum, ['count' => $selectionMaximum]) }}</legend>
+            <legend class="text-sm font-semibold text-stone-800 dark:text-stone-100">{{ __('Available Options') }}</legend>
             <div class="grid gap-3 sm:grid-cols-2">
                 @foreach ($availableOptions as $option)
-                    <x-ui.checkbox
-                        wire:model="selectedOptions"
-                        :id="'verified-signup-option-'.$option->public_id"
-                        name="selectedOptions[]"
-                        :value="$option->public_id"
-                        :label="$option->name"
-                        variant="card"
-                    />
+                    <article class="flex min-h-20 items-center justify-between gap-4 border border-stone-300 bg-white/60 px-4 py-3 dark:border-stone-700 dark:bg-stone-950/30">
+                        <h3 class="font-semibold text-stone-900 dark:text-stone-100">{{ $option->name }}</h3>
+                        <x-ui.button
+                            wire:click="claim('{{ $option->public_id }}')"
+                            wire:loading.attr="disabled"
+                            wire:target="claim('{{ $option->public_id }}')"
+                            :aria-label="__('Claim :option', ['option' => $option->name])"
+                        >
+                            <span wire:loading.remove wire:target="claim('{{ $option->public_id }}')">{{ __('Claim') }}</span>
+                            <span wire:loading wire:target="claim('{{ $option->public_id }}')">{{ __('Claiming…') }}</span>
+                        </x-ui.button>
+                    </article>
                 @endforeach
             </div>
             @if ($errors->has('selectedOptions') || $errors->has('signup'))
@@ -74,12 +81,6 @@
             @endif
         </fieldset>
 
-        <div>
-            <x-ui.button type="submit" wire:loading.attr="disabled" wire:target="complete">
-                <span wire:loading.remove wire:target="complete">{{ __('Complete Signup') }}</span>
-                <span wire:loading wire:target="complete">{{ __('Saving…') }}</span>
-            </x-ui.button>
-        </div>
     </form>
     @endif
 </section>
