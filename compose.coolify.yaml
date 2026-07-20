@@ -34,7 +34,7 @@ services:
       MAIL_MAILER: smtp
       MAIL_SCHEME: "${MAIL_SCHEME:-null}"
       MAIL_HOST: "${MAIL_HOST:?Set the SMTP host}"
-      MAIL_PORT: "${MAIL_PORT:-587}"
+      MAIL_PORT: "${MAIL_PORT:-2525}"
       MAIL_USERNAME: "${MAIL_USERNAME:?Set the SMTP username}"
       MAIL_PASSWORD: "${MAIL_PASSWORD:?Set the SMTP password}"
       MAIL_FROM_ADDRESS: "${MAIL_FROM_ADDRESS:?Set the verified sender address}"
