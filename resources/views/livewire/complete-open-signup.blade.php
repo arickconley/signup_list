@@ -1,4 +1,7 @@
-<div x-on:claim-option.window="$wire.beginClaim($event.detail.optionPublicId)">
+<div
+    x-on:claim-option.window="$wire.beginClaim($event.detail.optionPublicId)"
+    x-on:unclaim-option.window="$wire.unclaim($event.detail.optionPublicId)"
+>
     <p class="sr-only" role="status" aria-live="polite">{{ $announcement }}</p>
 
     @if ($completed)
@@ -9,9 +12,15 @@
                 </x-ui.callout>
             @else
                 <x-ui.callout :heading="__('Signup complete')">
-                    <p class="mt-1">{{ __('Your Option claims are confirmed. This Signup cannot be edited or cancelled without an account.') }}</p>
+                    <p class="mt-1">{{ __('Your Option claims are confirmed. You can unclaim them from this browser while the Signup Sheet is open.') }}</p>
                 </x-ui.callout>
             @endif
+        </div>
+    @elseif ($errors->has('unclaim'))
+        <div class="border-t-2 border-stone-800 px-5 py-8 sm:px-9 dark:border-stone-200">
+            <x-ui.callout variant="danger" :heading="__('This Option could not be unclaimed')">
+                {{ $errors->first('unclaim') }}
+            </x-ui.callout>
         </div>
     @elseif ($errors->has('signup') && ! $showNameModal)
         <div class="border-t-2 border-stone-800 px-5 py-8 sm:px-9 dark:border-stone-200">

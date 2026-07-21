@@ -3,8 +3,10 @@
 namespace App\Livewire;
 
 use App\Actions\CompleteOpenSignup as CompleteSignup;
+use App\Actions\UnclaimOpenParticipationOption;
 use App\Data\CompleteSignupInput;
 use App\Exceptions\CannotCompleteSignup;
+use App\Exceptions\CannotUnclaimOpenParticipationOption;
 use App\Models\Account;
 use App\Models\Option;
 use App\Models\Sheet;
@@ -272,6 +274,42 @@ class CompleteOpenSignup extends Component
         $this->resetErrorBag();
         $this->reset('pendingOptionPublicId', 'pendingOptionName', 'showNameModal');
         $this->announcement = '';
+    }
+
+    public function unclaim(
+        string $optionPublicId,
+        UnclaimOpenParticipationOption $unclaimOption,
+        OpenParticipationIdentity $participationIdentity,
+    ): void {
+        $authenticatedAccount = Auth::user();
+        $account = $authenticatedAccount instanceof Account
+            ? $authenticatedAccount
+            : null;
+
+        $this->resetErrorBag();
+        $this->announcement = '';
+
+        try {
+            $unclaimOption->handle(
+                $account,
+                $this->sheetPublicId,
+                $optionPublicId,
+                $account === null
+                    ? $participationIdentity->hashForSheet($this->sheetPublicId)
+                    : null,
+            );
+        } catch (CannotUnclaimOpenParticipationOption $exception) {
+            $this->addError('unclaim', $exception->getMessage());
+            $this->announcement = $exception->getMessage();
+
+            return;
+        }
+
+        session()->flash('option-unclaimed', __('Option unclaimed.'));
+
+        $this->redirectRoute('sheets.show', [
+            'sheet' => $this->sheetPublicId,
+        ], navigate: true);
     }
 
     public function render(): View

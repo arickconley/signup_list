@@ -77,8 +77,12 @@ One option selected within a signup, consuming exactly one unit of that option's
 _Avoid_: Signup, reservation
 
 **Participant Editing**:
-The ability of a verified account participant to edit or cancel their existing signup while the sheet is open. Unregistered and pending-verification participants cannot edit; owners may always remove claims or entire signups.
+The ability of a verified account participant to edit or cancel their existing signup while the sheet is open. Unregistered and pending-verification participants cannot generally edit; Browser-Bound Unclaiming is the narrow exception. Owners may always remove claims or entire signups.
 _Avoid_: Self-service setting, guest editing
+
+**Browser-Bound Unclaiming**:
+The narrow Open Participation ability for the same server-recognized browser session to remove one of its own Option Claims while the sheet remains open. It is not general Participant Editing: a remembered name never authorizes changes, clearing the browser session ends access, and removing the final claim removes the empty signup.
+_Avoid_: Name-based ownership, guest editing
 
 **Owner-Changed Signup**:
 A signup from which its sheet owner removed an option claim or the entire signup. Owners cannot alter participant identity or add claims; account participants receive an email showing before/after selections and linking to the sheet.

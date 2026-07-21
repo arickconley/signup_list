@@ -145,6 +145,110 @@ test('Unregistered Participant claims one Option immediately from its Claim butt
         ->and($option->refresh()->claimed_count)->toBe(1);
 });
 
+test('Unregistered Participant unclaims their Option from the same browser while the Sheet is open', function () {
+    $sheet = Sheet::factory()->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_OPEN,
+        'selection_maximum' => 1,
+    ]);
+    $option = $sheet->options()->create([
+        'name' => 'Same-browser cleanup',
+        'capacity' => 1,
+        'position' => 1,
+    ]);
+
+    Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
+        ->call('beginClaim', $option->public_id)
+        ->set('name', 'Browser Participant')
+        ->call('claimPending')
+        ->assertHasNoErrors();
+
+    $this->get(route('sheets.show', $sheet))
+        ->assertOk()
+        ->assertSeeHtml('aria-label="Unclaim Same-browser cleanup"')
+        ->assertDontSeeHtml('aria-label="Claim Same-browser cleanup"');
+
+    Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
+        ->call('unclaim', $option->public_id)
+        ->assertHasNoErrors()
+        ->assertSessionHas('option-unclaimed', 'Option unclaimed.')
+        ->assertRedirect(route('sheets.show', $sheet));
+
+    expect(Signup::query()->count())->toBe(0)
+        ->and(OptionClaim::query()->count())->toBe(0)
+        ->and($option->refresh()->claimed_count)->toBe(0);
+});
+
+test('a different browser cannot unclaim an Unregistered Participant Option', function () {
+    $sheet = Sheet::factory()->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_OPEN,
+        'selection_maximum' => 1,
+    ]);
+    $option = $sheet->options()->create([
+        'name' => 'Protected browser claim',
+        'capacity' => 2,
+        'position' => 1,
+    ]);
+
+    Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
+        ->call('beginClaim', $option->public_id)
+        ->set('name', 'Original Browser')
+        ->call('claimPending')
+        ->assertHasNoErrors();
+
+    $signup = Signup::query()->with('optionClaims')->sole();
+    $claimId = $signup->optionClaims->sole()->id;
+    session()->forget('open-participation.identities.'.$sheet->public_id);
+
+    $this->get(route('sheets.show', $sheet))
+        ->assertOk()
+        ->assertSeeHtml('aria-label="Claim Protected browser claim"')
+        ->assertDontSeeHtml('aria-label="Unclaim Protected browser claim"');
+
+    Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
+        ->call('unclaim', $option->public_id)
+        ->assertHasErrors(['unclaim'])
+        ->assertSet('announcement', 'This Option Claim cannot be unclaimed.')
+        ->assertNoRedirect();
+
+    expect(Signup::query()->sole()->is($signup))->toBeTrue()
+        ->and(OptionClaim::query()->sole()->id)->toBe($claimId)
+        ->and($option->refresh()->claimed_count)->toBe(1);
+});
+
+test('an Unregistered Participant cannot unclaim after the Sheet closes', function () {
+    $sheet = Sheet::factory()->create([
+        'state' => Sheet::STATE_PUBLISHED,
+        'participation_policy' => Sheet::PARTICIPATION_OPEN,
+        'selection_maximum' => 1,
+    ]);
+    $option = $sheet->options()->create([
+        'name' => 'Closed browser claim',
+        'capacity' => 1,
+        'position' => 1,
+    ]);
+
+    Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id])
+        ->call('beginClaim', $option->public_id)
+        ->set('name', 'Original Browser')
+        ->call('claimPending')
+        ->assertHasNoErrors();
+
+    $component = Livewire::test('complete-open-signup', ['sheetPublicId' => $sheet->public_id]);
+    $sheet->update(['state' => Sheet::STATE_CLOSED]);
+
+    $component
+        ->call('unclaim', $option->public_id)
+        ->assertHasErrors(['unclaim'])
+        ->assertSet('announcement', 'This Option Claim cannot be unclaimed.')
+        ->assertNoRedirect();
+
+    expect(Signup::query()->count())->toBe(1)
+        ->and(OptionClaim::query()->count())->toBe(1)
+        ->and($option->refresh()->claimed_count)->toBe(1);
+});
+
 test('Unregistered Participant Claim opens a name-only modal for the selected Option', function () {
     $sheet = Sheet::factory()->create([
         'state' => Sheet::STATE_PUBLISHED,
@@ -377,7 +481,7 @@ test('Unregistered Participant completes a Signup without creating an Account', 
         ->call('complete')
         ->assertHasNoErrors()
         ->assertSee('Signup complete')
-        ->assertSee('cannot be edited or cancelled without an account')
+        ->assertSee('You can unclaim them from this browser while the Signup Sheet is open.')
         ->assertDontSee('Edit Signup')
         ->assertDontSee('Cancel Signup');
 

@@ -89,6 +89,8 @@
 
                     @if (session()->has('option-claimed'))
                         <x-ui.callout class="mt-5" :heading="session('option-claimed')" />
+                    @elseif (session()->has('option-unclaimed'))
+                        <x-ui.callout class="mt-5" :heading="session('option-unclaimed')" />
                     @endif
 
                     <ol class="divide-y divide-stone-300 border-b border-stone-400 dark:divide-stone-700 dark:border-stone-600">
@@ -150,10 +152,18 @@
                                         </dl>
 
                                         @if ($isClaimedByParticipant)
-                                            <p class="flex min-h-11 items-center justify-center gap-2 border border-teal-900 bg-teal-50 px-3 py-3 font-mono text-xs font-bold uppercase tracking-[0.12em] text-teal-900 sm:h-full sm:border-s-0 dark:border-teal-300 dark:bg-teal-950/50 dark:text-teal-200">
-                                                <span aria-hidden="true">✓</span>
-                                                {{ __('Yours') }}
-                                            </p>
+                                            <x-ui.button
+                                                variant="outline"
+                                                class="group w-full justify-between py-3 sm:h-full sm:justify-center sm:border-s-0 sm:px-3"
+                                                x-on:click="$dispatch('unclaim-option', { optionPublicId: '{{ $option->public_id }}' })"
+                                                :aria-label="__('Unclaim :option', ['option' => $option->name])"
+                                            >
+                                                <span class="grid text-start leading-tight">
+                                                    <span class="font-mono text-[0.6rem] font-bold uppercase tracking-[0.12em] text-teal-800 dark:text-teal-300">{{ __('Yours') }}</span>
+                                                    <span class="font-mono text-xs font-bold uppercase tracking-[0.16em]">{{ __('Unclaim') }}</span>
+                                                </span>
+                                                <span class="flex size-7 items-center justify-center border border-current text-lg leading-none transition-transform duration-150 group-hover:-translate-x-0.5" aria-hidden="true">×</span>
+                                            </x-ui.button>
                                         @elseif ($isAvailable && $participantReachedSelectionMaximum)
                                             <p class="flex min-h-11 items-center justify-center border border-stone-400 bg-stone-100 px-3 py-3 text-center font-mono text-[0.65rem] font-bold uppercase tracking-[0.1em] text-stone-600 sm:h-full sm:border-s-0 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-300">
                                                 {{ __('Maximum reached') }}
